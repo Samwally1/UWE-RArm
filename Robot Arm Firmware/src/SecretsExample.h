@@ -1,2 +1,2 @@
-const char* WifiName = "";
-const char* WifiPassword = "";
+const char* WIFI_SSID = "";
+const char* WIFI_PASSWORD = "";
