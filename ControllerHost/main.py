@@ -55,26 +55,6 @@ def ReadController():
     }
 
 
-def ReadControllerEvents():
-    global Controller
-
-    for event in pygame.event.get():
-        if event.type == pygame.JOYDEVICEREMOVED:
-            if (
-                Controller is not None
-                and event.instance_id == Controller.get_instance_id()
-            ):
-                Controller.quit()
-                Controller = None
-                print("Controller disconnected")
-
-        elif event.type == pygame.JOYBUTTONDOWN:
-            print(f"Button {event.button} pressed")
-
-        elif event.type == pygame.JOYBUTTONUP:
-            print(f"Button {event.button} released")
-
-
 def DecodeEvents(Output):
 
     Decoded = {
@@ -95,7 +75,6 @@ def DecodeEvents(Output):
 
 try:
     while True:
-        ReadControllerEvents()
 
         if ControllerConnected():
             DecodeEvents(ReadController())
