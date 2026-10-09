@@ -12,4 +12,4 @@ void setup() {
 }
 
 void loop() {
-}
+    if(x == Training)
