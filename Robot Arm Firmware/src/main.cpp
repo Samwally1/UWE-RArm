@@ -15,6 +15,8 @@ void setup()
 
 void loop()
 {
+    PrintControllerState();
+
     if (ArmMode == "Training") {
         Serial.println("--------------- In Training Mode ---------------");
 
