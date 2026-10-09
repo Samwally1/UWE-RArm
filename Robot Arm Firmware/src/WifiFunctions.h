@@ -3,34 +3,10 @@
 #include <ESP32Ping.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <mbedtls/ssl_ciphersuites.h>
 
 #include "Secrets.h"
 
-static const char CONTROLLER_CA_CERT[] PROGMEM = R"EOF(
------BEGIN CERTIFICATE-----
-MIICnzCCAiWgAwIBAgIQf/MZd5csIkp2FV0TttaF4zAKBggqhkjOPQQDAzBHMQsw
-CQYDVQQGEwJVUzEiMCAGA1UEChMZR29vZ2xlIFRydXN0IFNlcnZpY2VzIExMQzEU
-MBIGA1UEAxMLR1RTIFJvb3QgUjQwHhcNMjMxMjEzMDkwMDAwWhcNMjkwMjIwMTQw
-MDAwWjA7MQswCQYDVQQGEwJVUzEeMBwGA1UEChMVR29vZ2xlIFRydXN0IFNlcnZp
-Y2VzMQwwCgYDVQQDEwNXRTEwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARvzTr+
-Z1dHTCEDhUDCR127WEcPQMFcF4XGGTfn1XzthkubgdnXGhOlCgP4mMTG6J7/EFmP
-LCaY9eYmJbsPAvpWo4H+MIH7MA4GA1UdDwEB/wQEAwIBhjAdBgNVHSUEFjAUBggr
-BgEFBQcDAQYIKwYBBQUHAwIwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQU
-kHeSNWfE/6jMqeZ72YB5e8yT+TgwHwYDVR0jBBgwFoAUgEzW63T/STaj1dj8tT7F
-avCUHYwwNAYIKwYBBQUHAQEEKDAmMCQGCCsGAQUFBzAChhhodHRwOi8vaS5wa2ku
-Z29vZy9yNC5jcnQwKwYDVR0fBCQwIjAgoB6gHIYaaHR0cDovL2MucGtpLmdvb2cv
-ci9yNC5jcmwwEwYDVR0gBAwwCjAIBgZngQwBAgEwCgYIKwYBBAHWeQIEAgSB9QSB
-8gDwAHUAlE5Dh/rswe+B8xkkJqgYZQHH0184AgE/cmd9VTcuGdgAAAGgROwrSwAA
-BAMARjBEAiB+oOGCfXpbrUwp+82zIXw6IolL/vFlf+K5l9pAEBUDaQIgIn9utkV6
-L/e7Aus3PSoqSTKxoSWxaIM0THP2xS3bexoAdwDYCVU7lE96/8gWGW+UT4WrsPj8
-XodVJg8V0S5yu0VLFAAAAaBE7Ct6AAAEAwBIMEYCIQDAa+WtSud+09AOlye/77Kf
-lxiOaDdw87f5H9X3xgHdegIhAKbZapaEHD0X0g78U3qBuonxc8WeJUMQgri6XDl3
-USE8MAoGCCqGSM49BAMCA0gAMEUCIFistNUpLe4huh6gUggSzLU5APrccV4yCkCd
-QX5msi6hAiEA8FyICGvvzgWNqEYQMx3YdkDp/hpx/hZEFvdHtmJRjd4=
------END CERTIFICATE-----
-)EOF";
-
+#if 0
 static const char CONTROLLER_RSA_CA_CERT[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIFVzCCAz+gAwIBAgINAgPlk28xsBNJiGuiFzANBgkqhkiG9w0BAQwFADBHMQsw
@@ -69,6 +45,7 @@ static const uint16_t CONTROLLER_CIPHER_SUITES[] = {
     MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
     0
 };
+#endif
 
 bool ConnectToWiFi() {
 
@@ -142,8 +119,7 @@ bool CheckControllerMode()
     }
 
     WiFiClientSecure client;
-    client.setCACert(CONTROLLER_RSA_CA_CERT);
-    client.setCipherSuites(CONTROLLER_CIPHER_SUITES);
+    client.setInsecure();
 
     HTTPClient http;
     const String controllerUrl = "https://" + String(HOST) + "/mode";
