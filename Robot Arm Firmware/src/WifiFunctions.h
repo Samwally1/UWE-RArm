@@ -72,7 +72,7 @@ bool CheckControllerMode()
     WiFiClient client;
 
     HTTPClient http;
-    const String controllerUrl = "http://" + String(HOST) + "/mode";
+    const String controllerUrl = "https://" + String(HOST) + "/mode";
     if (!http.begin(client, controllerUrl)) {
         Serial.println("Failed to initialise request");
         return false;
