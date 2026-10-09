@@ -14,3 +14,10 @@ def GetController():
 def ControllerConnected():
     pygame.event.pump()
     return GetController() is not None
+
+
+while True:
+    if ControllerConnected == True:
+        pass
+    else:
+        print("pls Connect Controller")
