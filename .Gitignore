@@ -1,1 +1,11 @@
-Robot Arm Firmware\src\Secrets.h
+# Python cache
+__pycache__/
+*.pyc
+
+# Python virtual environment
+.venv/
+
+# Passwords and local settings
+.env
+/Robot Arm Firmware/src/Secrets.h
+
