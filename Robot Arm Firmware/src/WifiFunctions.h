@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ESP32Ping.h>
+
 
 #include "secrets.h"
 
@@ -44,4 +46,19 @@ bool ConnectToWiFi() {
 
     // Return true to indicate a successful connection.
     return true;
+}
+
+void TestLatency()
+{
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected");
+        return;
+    }
+
+    // Send 3 pings and print average round-trip latency.
+    if (Ping.ping(HOST, 3)) {
+        Serial.printf("Average latency: %.2f ms\n", Ping.averageTime());
+    } else {
+        Serial.println("Ping failed");
+    }
 }
