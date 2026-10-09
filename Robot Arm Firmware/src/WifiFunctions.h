@@ -136,15 +136,44 @@ bool ReadControllerValue(const String& state, const char* name, float& value)
     return valueEnd != state.c_str() + valueStart + 1;
 }
 
+bool ReadControllerButton(const String& state, const char* name, int& value)
+{
+    const String key = "\"" + String(name) + "\"";
+    const int keyStart = state.indexOf(key);
+    if (keyStart < 0) {
+        return false;
+    }
+
+    const int valueStart = state.indexOf(':', keyStart + key.length());
+    if (valueStart < 0) {
+        return false;
+    }
+
+    String buttonValue = state.substring(valueStart + 1);
+    buttonValue.trim();
+    if (buttonValue.startsWith("true")) {
+        value = 1;
+        return true;
+    }
+
+    if (buttonValue.startsWith("false")) {
+        value = 0;
+        return true;
+    }
+
+    return false;
+}
+
 bool DecodeStickInput(const String& state, StickInput& input)
 {
     return ReadControllerValue(state, "LSX", input.leftX)
         && ReadControllerValue(state, "LSY", input.leftY)
         && ReadControllerValue(state, "RSX", input.rightX)
-        && ReadControllerValue(state, "RSY", input.rightY);
+        && ReadControllerValue(state, "RSY", input.rightY)
+        && ReadControllerButton(state, "A", input.aButton);
 }
 
-bool PrintControllerState(StickInput& input)
+bool GetControllerState(StickInput& input)
 {
     static WiFiClientSecure client;
     static HTTPClient http;
@@ -208,4 +237,33 @@ bool PrintControllerState(StickInput& input)
     }
 
     return false;
+}
+
+void SendArmStatus(const String& armStatus)
+{
+    static unsigned long lastStatusTime = 0;
+    constexpr unsigned long statusIntervalMs = 1000;
+
+    if (WiFi.status() != WL_CONNECTED || millis() - lastStatusTime < statusIntervalMs) {
+        return;
+    }
+    lastStatusTime = millis();
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient http;
+    const String statusUrl = "https://" + String(HOST) + "/status";
+    if (!http.begin(client, statusUrl)) {
+        Serial.println("Failed to initialise status request");
+        return;
+    }
+
+    http.addHeader("Content-Type", "text/plain; charset=utf-8");
+    const int statusCode = http.POST(armStatus);
+    if (statusCode != HTTP_CODE_NO_CONTENT) {
+        Serial.printf("Status POST failed: %d\n", statusCode);
+    }
+
+    http.end();
 }

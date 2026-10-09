@@ -9,6 +9,7 @@ struct StickInput {
     float leftY;
     float rightX;
     float rightY;
+    int aButton;
 };
 
 struct RobotPosition {

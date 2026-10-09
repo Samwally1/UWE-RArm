@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
 controller_state = {}
+arm_status = ""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -24,11 +25,32 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(response)
 
+        elif self.path == "/status":
+            response = arm_status.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
         else:
             self.send_error(404)
 
     def do_POST(self):
-        if self.path != "/controller":
+        if self.path == "/controller":
+            target = controller_state
+        elif self.path == "/status":
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length <= 0 or content_length > 4096:
+                self.send_error(400, "Invalid arm status size")
+                return
+
+            global arm_status
+            arm_status = self.rfile.read(content_length).decode("utf-8")
+            self.send_response(204)
+            self.end_headers()
+            return
+        else:
             self.send_error(404)
             return
 
@@ -47,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400, "Controller state must be an object")
             return
 
-        controller_state.update(payload)
+        target.update(payload)
         self.send_response(204)
         self.end_headers()
 

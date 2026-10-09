@@ -1,5 +1,7 @@
 import os
 import json
+import queue
+import threading
 import urllib.error
 import urllib.request
 
@@ -14,7 +16,9 @@ pygame.joystick.init()
 
 Controller = None
 SERVER_URL = "https://rarm.sjw-home.xyz/controller"
+STATUS_URL = SERVER_URL.rsplit("/controller", 1)[0] + "/status"
 POST_INTERVAL_SECONDS = 0.02
+StateBuffer = queue.Queue(maxsize=1)
 
 
 def GetController():
@@ -70,29 +74,67 @@ def DecodeEvents(Output):
         "A": Output['buttons'][0],
     }
 
-    for Name, Value in Decoded.items():
-        print(f"{Name} = {Value}")
-
     return Decoded
 
 
 def SendControllerState(decoded):
-    request = urllib.request.Request(
-        SERVER_URL,
-        data=json.dumps(decoded).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": "ControllerHost/1.0",
-        },
-        method="POST",
-    )
+    try:
+        StateBuffer.get_nowait()
+    except queue.Empty:
+        pass
 
     try:
-        with urllib.request.urlopen(request, timeout=0.5) as response:
-            if response.status != 204:
-                print(f"Server rejected controller state: {response.status}")
-    except urllib.error.URLError as error:
-        print(f"Could not send controller state: {error.reason}")
+        StateBuffer.put_nowait(decoded)
+    except queue.Full:
+        pass
+
+
+def SendBufferedControllerState():
+    lastErrorTime = 0.0
+
+    while True:
+        decoded = StateBuffer.get()
+        request = urllib.request.Request(
+            SERVER_URL,
+            data=json.dumps(decoded).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "ControllerHost/1.0",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=0.5) as response:
+                if response.status != 204:
+                    print(f"Server rejected controller state: {response.status}")
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            if time.monotonic() - lastErrorTime >= 1:
+                print(f"Could not send controller state: {error}")
+                lastErrorTime = time.monotonic()
+        finally:
+            StateBuffer.task_done()
+
+
+def PrintEspStatus():
+    lastStatus = None
+
+    while True:
+        try:
+            request = urllib.request.Request(
+                STATUS_URL,
+                headers={"User-Agent": "ControllerHost/1.0"},
+            )
+            with urllib.request.urlopen(request, timeout=0.5) as response:
+                status = response.read().decode("utf-8")
+
+            if status != lastStatus:
+                print(f"Arm status: {status}")
+                lastStatus = status
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            print(f"Could not read ESP status: {error}")
+
+        time.sleep(0.2)
 
 
 
@@ -101,6 +143,8 @@ try:
         raise RuntimeError("Set CONTROLLER_SERVER_URL to the trusted backend /controller URL")
 
     print(f"Sending controller state to: {SERVER_URL}")
+    threading.Thread(target=SendBufferedControllerState, daemon=True).start()
+    threading.Thread(target=PrintEspStatus, daemon=True).start()
 
     while True:
 

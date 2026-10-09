@@ -3,8 +3,12 @@
 #include "SticksToXYZ.h"
 
 String ArmMode = "";
+String ArmStatus = "Starting";
 
-StickInput controllerInput = {0, 0, 0, 0};
+static unsigned long lastPositionUpdateTime = 0;
+static unsigned long lastPositionPrintTime = 0;
+
+StickInput controllerInput = {0, 0, 0, 0, 0};
 
 RobotPosition targetPosition = {
     HomeChordsX,
@@ -13,49 +17,64 @@ RobotPosition targetPosition = {
     HeadAngle,
 };
 
+
+
 void setup()
-{
+{   
     Serial.begin(9600);
 
-    if (ConnectToWiFi()) {
-        TestLatency();
-        ArmMode = CheckControllerMode();
-    }
-}
-
-void loop()
-{
-    static unsigned long lastPositionUpdateTime = 0;
-    static unsigned long lastPositionPrintTime = 0;
+    ConnectToWiFi();
+    TestLatency();
+    ArmMode = CheckControllerMode();
 
     if (ArmMode == "Training") {
 
-        if (PrintControllerState(controllerInput)) {
+        while (controllerInput.aButton == 0) {
+
+        if (GetControllerState(controllerInput)) {
 
             const unsigned long currentTime = millis();
 
-            targetPosition = SticksToXYZ(
-                controllerInput,
-                currentTime - lastPositionUpdateTime,
-                targetPosition
-            );
+            if (lastPositionUpdateTime != 0) {
+                targetPosition = SticksToXYZ(
+                    controllerInput,
+                    currentTime - lastPositionUpdateTime,
+                    targetPosition
+                );
+            }
 
-            Serial.printf(
-                "Target XYZ: %.2f, %.2f, %.2f | Angle: %.2f\n",
-                targetPosition.x,
-                targetPosition.y,
-                targetPosition.z,
-                targetPosition.angle
-            );
+            lastPositionUpdateTime = currentTime;
 
-           
+            if (currentTime - lastPositionPrintTime >= 100) {
+                Serial.printf(
+                    "Target XYZ: %.2f, %.2f, %.2f | Angle: %.2f\n",
+                    targetPosition.x,
+                    targetPosition.y,
+                    targetPosition.z,
+                    targetPosition.angle
+                );
+                lastPositionPrintTime = currentTime;
+            }
+
+        
         } else {
             // Reset timing when controller input is unavailable.
             lastPositionUpdateTime = 0;
+            }
         }
-    } else {
-        lastPositionUpdateTime = 0;
+
     }
 
-    delay(1);
 }
+
+
+void loop()
+{
+    SendArmStatus(ArmStatus);
+    Serial.print("x");
+    delay(10000);
+}
+
+
+
+
