@@ -1,11 +1,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESP32Ping.h>
-
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
 #include "secrets.h"
-
-
 
 bool ConnectToWiFi() {
 
@@ -61,4 +60,35 @@ void TestLatency()
     } else {
         Serial.println("Ping failed");
     }
+}
+
+bool CheckControllerMode()
+{
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi not connected");
+        return;
+    }
+
+    WiFiClientSecure client;
+
+    HTTPClient http;
+    if (!http.begin(client, String(HOST) + "/mode")) {
+        Serial.println("Failed to initialise request");
+        return;
+    }
+
+    int statusCode = http.GET();
+
+    if (statusCode == HTTP_CODE_OK) {
+        String response = http.getString();
+        Serial.println(response);
+        return(true);
+    } else if (statusCode > 0) {
+        Serial.printf("HTTP error: %d\n", statusCode);
+    } else {
+        Serial.printf("GET failed: %s\n",
+                      HTTPClient::errorToString(statusCode).c_str());
+    }
+
+    http.end();
 }
