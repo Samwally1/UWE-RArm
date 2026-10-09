@@ -5,6 +5,7 @@
 #include <WiFiClientSecure.h>
 
 #include "Secrets.h"
+#include "SticksToXYZ.h"
 
 
 bool ConnectToWiFi() {
@@ -117,7 +118,33 @@ String CheckControllerMode()
     return mode;
 }
 
-void PrintControllerState()
+bool ReadControllerValue(const String& state, const char* name, float& value)
+{
+    const String key = "\"" + String(name) + "\"";
+    const int keyStart = state.indexOf(key);
+    if (keyStart < 0) {
+        return false;
+    }
+
+    const int valueStart = state.indexOf(':', keyStart + key.length());
+    if (valueStart < 0) {
+        return false;
+    }
+
+    char* valueEnd = nullptr;
+    value = strtof(state.c_str() + valueStart + 1, &valueEnd);
+    return valueEnd != state.c_str() + valueStart + 1;
+}
+
+bool DecodeStickInput(const String& state, StickInput& input)
+{
+    return ReadControllerValue(state, "LSX", input.leftX)
+        && ReadControllerValue(state, "LSY", input.leftY)
+        && ReadControllerValue(state, "RSX", input.rightX)
+        && ReadControllerValue(state, "RSY", input.rightY);
+}
+
+bool PrintControllerState(StickInput& input)
 {
     static WiFiClientSecure client;
     static HTTPClient http;
@@ -132,11 +159,11 @@ void PrintControllerState()
             http.end();
             requestInitialised = false;
         }
-        return;
+        return false;
     }
 
     if (millis() - lastRequestTime < pollIntervalMs) {
-        return;
+        return false;
     }
     lastRequestTime = millis();
 
@@ -147,7 +174,7 @@ void PrintControllerState()
         const String controllerUrl = "https://" + String(HOST) + "/controller";
         if (!http.begin(client, controllerUrl)) {
             Serial.println("Failed to initialise controller request");
-            return;
+            return false;
         }
 
         requestInitialised = true;
@@ -157,10 +184,15 @@ void PrintControllerState()
     if (statusCode == HTTP_CODE_OK) {
         const String state = http.getString();
         if (state != lastState) {
-            Serial.print("Controller state: ");
-            Serial.println(state);
             lastState = state;
         }
+
+        if (!DecodeStickInput(state, input)) {
+            Serial.println("Invalid controller state");
+            return false;
+        }
+
+        return true;
     } else if (statusCode > 0) {
         Serial.printf("Controller HTTP error: %d\n", statusCode);
     } else {
@@ -174,4 +206,6 @@ void PrintControllerState()
         http.end();
         requestInitialised = false;
     }
+
+    return false;
 }
