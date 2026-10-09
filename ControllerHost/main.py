@@ -1,4 +1,7 @@
 import os
+import json
+import urllib.error
+import urllib.request
 
 # Must be set before pygame.init().
 os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
@@ -10,6 +13,8 @@ pygame.init()
 pygame.joystick.init()
 
 Controller = None
+SERVER_URL = os.getenv("CONTROLLER_SERVER_URL")
+POST_INTERVAL_SECONDS = 0.02
 
 
 def GetController():
@@ -69,20 +74,38 @@ def DecodeEvents(Output):
         print(f"{Name} = {Value}")
 
     return Decoded
-    
+
+
+def SendControllerState(decoded):
+    request = urllib.request.Request(
+        SERVER_URL,
+        data=json.dumps(decoded).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=0.5) as response:
+            if response.status != 204:
+                print(f"Server rejected controller state: {response.status}")
+    except urllib.error.URLError as error:
+        print(f"Could not send controller state: {error.reason}")
 
 
 
 try:
+    if not SERVER_URL:
+        raise RuntimeError("Set CONTROLLER_SERVER_URL to the trusted backend /controller URL")
+
     while True:
 
         if ControllerConnected():
-            DecodeEvents(ReadController())
+            SendControllerState(DecodeEvents(ReadController()))
         else:
             print("Please connect Xbox controller")
             time.sleep(1)
 
-        time.sleep(0.1)
+        time.sleep(POST_INTERVAL_SECONDS)
 
 except KeyboardInterrupt:
     pass
