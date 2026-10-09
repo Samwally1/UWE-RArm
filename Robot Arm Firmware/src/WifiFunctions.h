@@ -2,9 +2,9 @@
 #include <WiFi.h>
 #include <ESP32Ping.h>
 #include <HTTPClient.h>
-#include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 
-#include "secrets.h"
+#include "Secrets.h"
 
 bool ConnectToWiFi() {
 
@@ -66,23 +66,27 @@ bool CheckControllerMode()
 {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected");
-        return;
+        return false;
     }
 
-    WiFiClientSecure client;
+    WiFiClient client;
 
     HTTPClient http;
-    if (!http.begin(client, String(HOST) + "/mode")) {
+    const String controllerUrl = "http://" + String(HOST) + ":8000/mode";
+    if (!http.begin(client, controllerUrl)) {
         Serial.println("Failed to initialise request");
-        return;
+        return false;
     }
 
+    const char* headerKeys[] = {"mode"};
+    http.collectHeaders(headerKeys, 1);
     int statusCode = http.GET();
+    bool isTrainingMode = false;
 
     if (statusCode == HTTP_CODE_OK) {
-        String response = http.getString();
-        Serial.println(response);
-        return(true);
+        const String mode = http.header("mode");
+        Serial.printf("Controller mode: %s\n", mode.c_str());
+        isTrainingMode = mode == "Training";
     } else if (statusCode > 0) {
         Serial.printf("HTTP error: %d\n", statusCode);
     } else {
@@ -91,4 +95,5 @@ bool CheckControllerMode()
     }
 
     http.end();
+    return isTrainingMode;
 }

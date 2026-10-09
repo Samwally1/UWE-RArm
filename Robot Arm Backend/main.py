@@ -7,7 +7,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == "/mode":
             self.send_response(200)
-            self.send_header("mode", "Training")
+            self.send_header("Mode", "Training")
             self.end_headers()
 
             self.wfile.write(b"true")

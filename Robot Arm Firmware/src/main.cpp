@@ -4,9 +4,11 @@
 
 void setup() {
     Serial.begin(9600);
-    ConnectToWiFi();
-    TestLatency();
-    CheckControllerMode();
+
+    if (ConnectToWiFi()) {
+        TestLatency();
+        CheckControllerMode();
+    }
 }
 
 void loop() {
