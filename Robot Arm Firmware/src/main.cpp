@@ -7,7 +7,7 @@ void setup() {
 
     if (ConnectToWiFi()) {
         TestLatency();
-        CheckControllerMode();
+        bool x = CheckControllerMode();
     }
 }
 
