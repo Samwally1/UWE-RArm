@@ -119,25 +119,48 @@ String CheckControllerMode()
 
 void PrintControllerState()
 {
+    static WiFiClientSecure client;
+    static HTTPClient http;
+    static bool requestInitialised = false;
+    static String lastState;
+    static unsigned long lastRequestTime = 0;
+    constexpr unsigned long pollIntervalMs = 20;
+
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected");
+        if (requestInitialised) {
+            http.end();
+            requestInitialised = false;
+        }
         return;
     }
 
-    WiFiClientSecure client;
-    client.setInsecure();
-
-    HTTPClient http;
-    const String controllerUrl = "https://" + String(HOST) + "/controller";
-    if (!http.begin(client, controllerUrl)) {
-        Serial.println("Failed to initialise controller request");
+    if (millis() - lastRequestTime < pollIntervalMs) {
         return;
+    }
+    lastRequestTime = millis();
+
+    if (!requestInitialised) {
+        client.setInsecure();
+        http.setReuse(true);
+
+        const String controllerUrl = "https://" + String(HOST) + "/controller";
+        if (!http.begin(client, controllerUrl)) {
+            Serial.println("Failed to initialise controller request");
+            return;
+        }
+
+        requestInitialised = true;
     }
 
     const int statusCode = http.GET();
     if (statusCode == HTTP_CODE_OK) {
-        Serial.print("Controller state: ");
-        Serial.println(http.getString());
+        const String state = http.getString();
+        if (state != lastState) {
+            Serial.print("Controller state: ");
+            Serial.println(state);
+            lastState = state;
+        }
     } else if (statusCode > 0) {
         Serial.printf("Controller HTTP error: %d\n", statusCode);
     } else {
@@ -147,5 +170,8 @@ void PrintControllerState()
         );
     }
 
-    http.end();
+    if (statusCode != HTTP_CODE_OK) {
+        http.end();
+        requestInitialised = false;
+    }
 }

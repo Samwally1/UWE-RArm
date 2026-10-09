@@ -13,7 +13,7 @@ pygame.init()
 pygame.joystick.init()
 
 Controller = None
-SERVER_URL = os.getenv("CONTROLLER_SERVER_URL")
+SERVER_URL = "https://rarm.sjw-home.xyz/controller"
 POST_INTERVAL_SECONDS = 0.02
 
 
@@ -80,7 +80,10 @@ def SendControllerState(decoded):
     request = urllib.request.Request(
         SERVER_URL,
         data=json.dumps(decoded).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "ControllerHost/1.0",
+        },
         method="POST",
     )
 
@@ -96,6 +99,8 @@ def SendControllerState(decoded):
 try:
     if not SERVER_URL:
         raise RuntimeError("Set CONTROLLER_SERVER_URL to the trusted backend /controller URL")
+
+    print(f"Sending controller state to: {SERVER_URL}")
 
     while True:
 

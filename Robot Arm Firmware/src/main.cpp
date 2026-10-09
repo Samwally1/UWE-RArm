@@ -15,11 +15,13 @@ void setup()
 
 void loop()
 {
+    static unsigned long lastModeMessageTime = 0;
+
     PrintControllerState();
 
-    if (ArmMode == "Training") {
-        Serial.println("--------------- In Training Mode ---------------");
-
+    if (ArmMode == "Training" && millis() - lastModeMessageTime >= 1000) {
+        lastModeMessageTime = millis();
     }
-    delay(1000);
+
+    delay(1);
 }
