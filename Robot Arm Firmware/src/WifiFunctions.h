@@ -71,39 +71,48 @@ void TestLatency()
     }
 }
 
-bool CheckControllerMode()
+String CheckControllerMode()
 {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected");
-        return false;
+        return "";
     }
 
     WiFiClientSecure client;
     client.setInsecure();
 
     HTTPClient http;
-    const String controllerUrl = "https://" + String(HOST) + "/mode";
+
+    // HOST should contain only the hostname, without https://.
+    String controllerUrl = "https://" + String(HOST) + "/mode";
+
     if (!http.begin(client, controllerUrl)) {
         Serial.println("Failed to initialise request");
-        return false;
+        return "";
     }
 
     const char* headerKeys[] = {"mode"};
     http.collectHeaders(headerKeys, 1);
+
     int statusCode = http.GET();
-    bool isTrainingMode = false;
+    String mode = "";
 
     if (statusCode == HTTP_CODE_OK) {
-        const String mode = http.header("mode");
+        mode = http.header("mode");
+
         Serial.printf("Controller mode: %s\n", mode.c_str());
-        isTrainingMode = mode == "Training";
-    } else if (statusCode > 0) {
+    }
+    else if (statusCode > 0) {
         Serial.printf("HTTP error: %d\n", statusCode);
-    } else {
-        Serial.printf("GET failed: %s\n",
-                      HTTPClient::errorToString(statusCode).c_str());
+    }
+    else {
+        Serial.printf(
+            "GET failed: %s\n",
+            HTTPClient::errorToString(statusCode).c_str()
+        );
     }
 
     http.end();
-    return isTrainingMode;
+
+    return mode;
 }

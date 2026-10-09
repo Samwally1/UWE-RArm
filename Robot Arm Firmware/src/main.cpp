@@ -1,15 +1,23 @@
 #include <Arduino.h>
-
 #include "WifiFunctions.h"
 
-void setup() {
+String ArmMode = "";
+
+void setup()
+{
     Serial.begin(9600);
 
     if (ConnectToWiFi()) {
         TestLatency();
-        bool x = CheckControllerMode();
+        ArmMode = CheckControllerMode();
     }
 }
 
-void loop() {
-    if(x == Training)
+void loop()
+{
+    if (ArmMode == "Training") {
+        Serial.println("--------------- In Training Mode ---------------");
+
+    }
+    delay(1000);
+}
