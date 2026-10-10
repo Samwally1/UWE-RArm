@@ -72,6 +72,9 @@ def DecodeEvents(Output):
         "RSX": Output['axes'][2],
         "RSY": Output['axes'][3],
         "A": Output['buttons'][0],
+        "B": Output['buttons'][1],
+        "X": Output['buttons'][2],
+        "Y": Output['buttons'][3],
     }
 
     return Decoded

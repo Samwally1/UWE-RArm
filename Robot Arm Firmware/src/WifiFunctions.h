@@ -174,7 +174,10 @@ bool DecodeStickInput(const String& state, StickInput& input)
         && ReadControllerValue(state, "LSY", input.leftY)
         && ReadControllerValue(state, "RSX", input.rightX)
         && ReadControllerValue(state, "RSY", input.rightY)
-        && ReadControllerButton(state, "A", input.aButton);
+        && ReadControllerButton(state, "A", input.aButton)
+        && ReadControllerButton(state, "B", input.bButton)
+        && ReadControllerButton(state, "X", input.xButton)
+        && ReadControllerButton(state, "Y", input.yButton);
 }
 
 bool GetControllerState(StickInput& input)

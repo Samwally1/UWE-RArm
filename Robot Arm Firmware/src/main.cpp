@@ -10,7 +10,7 @@ String ArmStatus = "Starting";
 static unsigned long lastPositionUpdateTime = 0;
 static unsigned long lastPositionPrintTime = 0;
 
-StickInput controllerInput = {0, 0, 0, 0, 0};
+StickInput controllerInput = {0, 0, 0, 0, 0, 0, 0, 0};
 Servo jointServos[4];
 
 RobotPosition targetPosition = {
@@ -149,14 +149,14 @@ void setup(){
 
 void loop()
 {
-    SendArmStatus(ArmStatus);
-    Serial.print("x");
-    for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
+    if (GetControllerState(controllerInput) && controllerInput.bButton == 1) {
+        for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
+            jointServos[jointIndex].write(JointHomes[jointIndex]);
+        }
+        SendArmStatus("B pressed: moving all joints home");
+    }
 
-        jointServos[jointIndex].write(JointHomes[jointIndex]);
-
-    };
-    delay(1000);
+    delay(20);
 }
 
 
