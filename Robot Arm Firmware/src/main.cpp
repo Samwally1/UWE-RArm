@@ -120,13 +120,12 @@ void setup(){
         Serial.println("Joint calibration:");
 
         for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-            Serial.printf(
-                "Joint %d | Min: %d | Max: %d | 0 deg: %d\n",
-                jointIndex + 1,
-                JointLims[jointIndex][0],
-                JointLims[jointIndex][1],
-                Joint0s[jointIndex]
-            );
+            const String jointCalibration = "Joint " + String(jointIndex + 1)
+                + " | Min: " + String(JointLims[jointIndex][0])
+                + " | Max: " + String(JointLims[jointIndex][1])
+                + " | 0 deg: " + String(Joint0s[jointIndex]);
+            Serial.println(jointCalibration);
+            SendArmStatus(jointCalibration);
         }
 
         if (SaveCalibration()) {
