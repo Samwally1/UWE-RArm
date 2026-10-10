@@ -35,6 +35,8 @@ void setup(){
     TestLatency();
     ArmMode = CheckControllerMode();
 
+    SendArmStatus("");
+
     const bool calibrationLoaded = LoadCalibration();
     const bool trainingRequestedAtStartup = GetControllerState(controllerInput)
         && controllerInput.aButton == 1;
@@ -124,7 +126,6 @@ void setup(){
                 + " | Min: " + String(JointLims[jointIndex][0])
                 + " | Max: " + String(JointLims[jointIndex][1])
                 + " | 0 deg: " + String(Joint0s[jointIndex]);
-            Serial.println(jointCalibration);
             SendArmStatus(jointCalibration);
         }
 
