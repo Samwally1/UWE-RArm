@@ -21,8 +21,8 @@ RobotPosition targetPosition = {
 
 
 
-void setup()
-{   
+void setup(){   
+
     Serial.begin(9600);
 
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
@@ -34,21 +34,27 @@ void setup()
     ConnectToWiFi();
     TestLatency();
     ArmMode = CheckControllerMode();
+    const bool calibrationLoaded = LoadCalibration();
 
-    if (ArmMode == "Training") {
+    if (ArmMode == "Training" || !calibrationLoaded) {
         SendArmStatus("Training Angles");
 
-        const char* operationNames[4] = {
+        const char* operationNames[3] = {
             "Min angle",
             "Max angle",
             "0 angle",
-            "90 angle",
         };
 
         for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
             int angleOutputs[4] = {0, 0, 0, 0};
 
-            for (int operationIndex = 0; operationIndex < 4; ++operationIndex) {
+            if(jointIndex == 1){
+
+                jointServos[2].write(0);
+            }
+
+            for (int operationIndex = 0; operationIndex < 3; ++operationIndex) {
+
                 SendArmStatus(
                     "Joint " + String(jointIndex + 1) + ": " + operationNames[operationIndex]
                 );
@@ -75,15 +81,15 @@ void setup()
                             180
                         );
                         jointServos[jointIndex].write(servoAngle);
-                        Serial.printf(
-                            "Angle: %d\n",
-                            servoAngle
-                        );
+
                         lastPositionPrintTime = currentTime;
                     }
                 }
 
                 angleOutputs[operationIndex] = static_cast<int>(targetPosition.angle);
+
+                targetPosition.angle = 90;
+                jointServos[jointIndex].write(90);
 
                 while (controllerInput.aButton == 1) {
                     GetControllerState(controllerInput);
@@ -93,20 +99,28 @@ void setup()
             JointLims[jointIndex][0] = angleOutputs[0];
             JointLims[jointIndex][1] = angleOutputs[1];
             Joint0s[jointIndex] = angleOutputs[2];
-            Joint90s[jointIndex] = angleOutputs[3];
         }
-    }
+    
 
-    Serial.println("Joint calibration:");
-    for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-        Serial.printf(
-            "Joint %d | Min: %d | Max: %d | 0 deg: %d | 90 deg: %d\n",
-            jointIndex + 1,
-            JointLims[jointIndex][0],
-            JointLims[jointIndex][1],
-            Joint0s[jointIndex],
-            Joint90s[jointIndex]
-        );
+        Serial.println("Joint calibration:");
+
+        for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
+            Serial.printf(
+                "Joint %d | Min: %d | Max: %d | 0 deg: %d\n",
+                jointIndex + 1,
+                JointLims[jointIndex][0],
+                JointLims[jointIndex][1],
+                Joint0s[jointIndex]
+            );
+        }
+
+        if (SaveCalibration()) {
+            SendArmStatus("Calibration saved");
+        } else {
+            SendArmStatus("Calibration save failed");
+        }
+    } else {
+        SendArmStatus("Loaded saved calibration");
     }
 }
 

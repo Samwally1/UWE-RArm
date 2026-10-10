@@ -3,11 +3,11 @@ float HomeChordsY = 0;
 float HomeChordsZ = 0;
 float HeadAngle = 0;
 
-float AngleSense = 5;
+float AngleSense = 20;
 float ChordSense = 0.005;
 
 int JointPins[4] = {
-    25,
+    32,
     27,
     26,
     25
@@ -29,11 +29,4 @@ int Joint0s[4] = {
     0
 };
 
-
-int Joint90s[4] = {
-    0,
-    0,
-    0,
-    0
-};
 

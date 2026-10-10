@@ -33,7 +33,11 @@ inline RobotPosition SticksToXYZ(
     position.x += ApplyStickDeadzone(input.leftX) * ChordSense * elapsedSeconds;
     position.y += ApplyStickDeadzone(input.leftY) * ChordSense * elapsedSeconds;
     position.z += ApplyStickDeadzone(input.rightY) * ChordSense * elapsedSeconds;
-    position.angle += ApplyStickDeadzone(input.rightX) * AngleSense * elapsedSeconds;
+    position.angle = constrain(
+        position.angle + ApplyStickDeadzone(input.rightX) * AngleSense * elapsedSeconds,
+        0.0f,
+        180.0f
+    );
 
     return position;
 }
