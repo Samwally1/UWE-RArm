@@ -1,7 +1,7 @@
 float HomeChordsX = 0;
 float HomeChordsY = 0;
 float HomeChordsZ = 0;
-float HeadAngle = 0;
+float HeadAngle = 90;
 
 float AngleSense = 20;
 float ChordSense = 0.005;
@@ -22,11 +22,11 @@ int JointLims[4][2] = {
 
 
 
-int Joint0s[4] = {
-    0,
-    0,
-    0,
-    0
+int JointHomes[4] = {
+    90,
+    90,
+    90,
+    90
 };
 
 

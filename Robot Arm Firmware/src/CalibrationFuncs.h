@@ -45,12 +45,20 @@ inline bool LoadCalibration()
     const String calibration = http.getString();
     http.end();
     const int limitsKey = calibration.indexOf("\"jointLimits\"");
-    const int zerosKey = calibration.indexOf("\"joint0s\"");
-    if (limitsKey < 0 || zerosKey < 0) {
+    int homesKey = calibration.indexOf("\"jointHomes\"");
+    if (homesKey < 0) {
+        homesKey = calibration.indexOf("\"joint0s\"");
+    }
+    if (limitsKey < 0 || homesKey < 0) {
         return false;
     }
 
-    const char* cursor = calibration.c_str() + limitsKey;
+    const int limitsArrayStart = calibration.indexOf('[', limitsKey);
+    if (limitsArrayStart < 0) {
+        return false;
+    }
+
+    const char* cursor = calibration.c_str() + limitsArrayStart;
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
         if (!ReadNextCalibrationValue(cursor, JointLims[jointIndex][0])
             || !ReadNextCalibrationValue(cursor, JointLims[jointIndex][1])) {
@@ -58,9 +66,14 @@ inline bool LoadCalibration()
         }
     }
 
-    cursor = calibration.c_str() + zerosKey;
+    const int homesArrayStart = calibration.indexOf('[', homesKey);
+    if (homesArrayStart < 0) {
+        return false;
+    }
+
+    cursor = calibration.c_str() + homesArrayStart;
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-        if (!ReadNextCalibrationValue(cursor, Joint0s[jointIndex])) {
+        if (!ReadNextCalibrationValue(cursor, JointHomes[jointIndex])) {
             return false;
         }
     }
@@ -80,12 +93,19 @@ inline bool SaveCalibration()
         }
         payload += "[" + String(JointLims[jointIndex][0]) + "," + String(JointLims[jointIndex][1]) + "]";
     }
+    payload += "],\"jointHomes\":[";
+    for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
+        if (jointIndex > 0) {
+            payload += ',';
+        }
+        payload += String(JointHomes[jointIndex]);
+    }
     payload += "],\"joint0s\":[";
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
         if (jointIndex > 0) {
             payload += ',';
         }
-        payload += String(Joint0s[jointIndex]);
+        payload += String(JointHomes[jointIndex]);
     }
     payload += "]}";
 
@@ -105,12 +125,12 @@ inline bool SaveCalibration()
 
 inline String CalibrationStatus()
 {
-    String status = "Loaded calibration | Joint 0s: ";
+    String status = "Loaded calibration | Joint homes: ";
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
         if (jointIndex > 0) {
             status += ", ";
         }
-        status += String(Joint0s[jointIndex]);
+        status += String(JointHomes[jointIndex]);
     }
     return status;
 }

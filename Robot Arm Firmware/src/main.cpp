@@ -31,11 +31,17 @@ void setup(){
         jointServos[jointIndex].write(90);
     }
 
-    ConnectToWiFi();
-    TestLatency();
+    if (ConnectToWiFi()) {
+        SendArmStatus("Power on: connected to WiFi");
+        const float latency = TestLatency();
+        delay(1000);
+        if (latency >= 0.0f) {
+            SendArmStatus("Latency = " + String(latency, 2) + " ms");
+        } else {
+            SendArmStatus("Latency test failed");
+        }
+    }
     ArmMode = CheckControllerMode();
-
-    SendArmStatus("");
 
     const bool calibrationLoaded = LoadCalibration();
     const bool trainingRequestedAtStartup = GetControllerState(controllerInput)
@@ -59,7 +65,7 @@ void setup(){
         const char* operationNames[3] = {
             "Min angle",
             "Max angle",
-            "0 angle",
+            "Home angle",
         };
 
         for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
@@ -105,8 +111,8 @@ void setup(){
 
                 angleOutputs[operationIndex] = static_cast<int>(targetPosition.angle);
 
-                targetPosition.angle = 90;
-                jointServos[jointIndex].write(90);
+                targetPosition.angle = JointHomes[jointIndex];
+                jointServos[jointIndex].write(JointHomes[jointIndex]);
 
                 while (controllerInput.aButton == 1) {
                     GetControllerState(controllerInput);
@@ -115,7 +121,7 @@ void setup(){
 
             JointLims[jointIndex][0] = angleOutputs[0];
             JointLims[jointIndex][1] = angleOutputs[1];
-            Joint0s[jointIndex] = angleOutputs[2];
+            JointHomes[jointIndex] = angleOutputs[2];
         }
     
 
@@ -125,7 +131,7 @@ void setup(){
             const String jointCalibration = "Joint " + String(jointIndex + 1)
                 + " | Min: " + String(JointLims[jointIndex][0])
                 + " | Max: " + String(JointLims[jointIndex][1])
-                + " | 0 deg: " + String(Joint0s[jointIndex]);
+                + " | Home: " + String(JointHomes[jointIndex]) + " deg";
             SendArmStatus(jointCalibration);
         }
 
@@ -147,7 +153,7 @@ void loop()
     Serial.print("x");
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
 
-        jointServos[jointIndex].write(Joint0s[jointIndex]);
+        jointServos[jointIndex].write(JointHomes[jointIndex]);
 
     };
     delay(1000);

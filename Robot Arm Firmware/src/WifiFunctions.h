@@ -51,11 +51,11 @@ bool ConnectToWiFi() {
     return true;
 }
 
-void TestLatency()
+float TestLatency()
 {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("WiFi not connected");
-        return;
+        return -1.0f;
     }
 
     String pingHost = String(HOST);
@@ -69,8 +69,10 @@ void TestLatency()
     // Ping only the host name; Ping cannot resolve a URL with a protocol or path.
     if (Ping.ping(pingHost.c_str(), 3)) {
         Serial.printf("Average latency: %.2f ms\n", Ping.averageTime());
+        return (Ping.averageTime());
     } else {
         Serial.println("Ping failed");
+        return -1.0f;
     }
 }
 

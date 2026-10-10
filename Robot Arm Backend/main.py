@@ -74,9 +74,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 payload = json.loads(self.rfile.read(content_length))
                 joint_limits = payload["jointLimits"]
-                joint_zeros = payload["joint0s"]
+                joint_homes = payload["jointHomes"]
             except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError):
-                self.send_error(400, "Calibration must contain jointLimits and joint0s")
+                self.send_error(400, "Calibration must contain jointLimits and jointHomes")
                 return
 
             if (
@@ -88,17 +88,17 @@ class Handler(BaseHTTPRequestHandler):
                     or not all(isinstance(value, int) and 0 <= value <= 180 for value in limits)
                     for limits in joint_limits
                 )
-                or not isinstance(joint_zeros, list)
-                or len(joint_zeros) != 4
-                or not all(isinstance(value, int) and 0 <= value <= 180 for value in joint_zeros)
+                or not isinstance(joint_homes, list)
+                or len(joint_homes) != 4
+                or not all(isinstance(value, int) and 0 <= value <= 180 for value in joint_homes)
             ):
-                self.send_error(400, "Calibration values must be four 0-180 limits and zero points")
+                self.send_error(400, "Calibration values must be four 0-180 limits and home positions")
                 return
 
             global calibration_data
             calibration_data = {
                 "jointLimits": joint_limits,
-                "joint0s": joint_zeros,
+                "jointHomes": joint_homes,
             }
             self.send_response(204)
             self.end_headers()
