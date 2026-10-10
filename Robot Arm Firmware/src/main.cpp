@@ -2,6 +2,7 @@
 #include <ESP32Servo.h>
 #include "WifiFunctions.h"
 #include "SticksToXYZ.h"
+#include "CalibrationFuncs.h"
 
 String ArmMode = "";
 String ArmStatus = "Starting";
@@ -20,7 +21,6 @@ RobotPosition targetPosition = {
 };
 
 
-
 void setup(){   
 
     Serial.begin(9600);
@@ -37,6 +37,10 @@ void setup(){
     const bool calibrationLoaded = LoadCalibration();
 
     if (ArmMode == "Training" || !calibrationLoaded) {
+        if (!calibrationLoaded){
+            SendArmStatus("No Trianing Config Found ...");
+        };
+
         SendArmStatus("Training Angles");
 
         const char* operationNames[3] = {
@@ -120,7 +124,8 @@ void setup(){
             SendArmStatus("Calibration save failed");
         }
     } else {
-        SendArmStatus("Loaded saved calibration");
+        SendArmStatus(CalibrationStatus());
+
     }
 }
 
@@ -129,6 +134,11 @@ void loop()
 {
     SendArmStatus(ArmStatus);
     Serial.print("x");
+    for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
+
+        jointServos[jointIndex].write(Joint0s[jointIndex]);
+
+    };
     delay(1000);
 }
 
