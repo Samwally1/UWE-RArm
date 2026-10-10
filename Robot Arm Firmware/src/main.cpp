@@ -34,9 +34,20 @@ void setup(){
     ConnectToWiFi();
     TestLatency();
     ArmMode = CheckControllerMode();
-    const bool calibrationLoaded = LoadCalibration();
 
-    if (ArmMode == "Training" || !calibrationLoaded) {
+    const bool calibrationLoaded = LoadCalibration();
+    const bool trainingRequestedAtStartup = GetControllerState(controllerInput)
+        && controllerInput.aButton == 1;
+
+    if (ArmMode == "Training" || !calibrationLoaded || trainingRequestedAtStartup) {
+        if (trainingRequestedAtStartup) {
+            SendArmStatus("Training requested: release A to begin");
+            while (controllerInput.aButton == 1) {
+                GetControllerState(controllerInput);
+                delay(10);
+            }
+        }
+
         if (!calibrationLoaded){
             SendArmStatus("No Trianing Config Found ...");
         };
