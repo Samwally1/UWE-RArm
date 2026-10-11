@@ -4,7 +4,7 @@ float HomeChordsZ = 0;
 float HeadAngle = 90;
 
 float AngleSense = 20;
-float ChordSense = 0.005;
+float ChordSense = 20;
 
 int JointPins[4] = {
     32,

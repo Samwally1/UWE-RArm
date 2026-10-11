@@ -205,10 +205,10 @@ print()
 
 
 print("Calculating the elbow servo angle (s3)\n"
-      "Subtract the shoulder angle from the forearm angle and add the 90 degree offset")
+      "Subtract the shoulder angle from the forearm angle and add the 180 degree offset")
 print()
 
-s3_Calc = sp.Eq(s3, sp.pi/2 + Forearm_Angle - s2)
+s3_Calc = sp.Eq(s3, sp.pi + Forearm_Angle - s2)
 
 sp.pprint(s3_Calc)
 print()
@@ -218,7 +218,7 @@ print("As one of the inputs is θ for the angle of the final limb relative to th
       "we can work out s4 based on the other servo angles and θ")
 print()
 
-s4_Calc = sp.Eq(s4, θ + sp.pi - s2 - s3)
+s4_Calc = sp.Eq(s4, θ + 3*sp.pi/2 - s2 - s3)
 
 sp.pprint(s4_Calc)
 print()
@@ -292,6 +292,124 @@ s3_Compiled = sp.Eq(s3, Substitutions[s3])
 s4_Compiled = sp.Eq(s4, Substitutions[s4])
 
 # ---------------------------------------------------------------------------
+# Forward kinematics: servo angles -> tool position and tool angle
+# ---------------------------------------------------------------------------
+
+print("Forward kinematics")
+print("Calculate x, y, z and the tool angle from s1, s2, s3 and s4")
+print("All input servo angles are in radians; positions are in millimetres.")
+print()
+
+FK_Base_Angle = sp.Symbol("FK_Base_Angle")
+FK_Forearm_Angle = sp.Symbol("FK_Forearm_Angle")
+FK_Tool_Angle = sp.Symbol("FK_Tool_Angle")
+FK_Elbow_r = sp.Symbol("FK_Elbow_r")
+FK_Elbow_z = sp.Symbol("FK_Elbow_z")
+FK_Wrist_r = sp.Symbol("FK_Wrist_r")
+FK_Wrist_z = sp.Symbol("FK_Wrist_z")
+FK_Tool_r = sp.Symbol("FK_Tool_r")
+FK_x = sp.Symbol("FK_x")
+FK_y = sp.Symbol("FK_y")
+FK_z = sp.Symbol("FK_z")
+
+print("Remove the servo offsets to find the absolute link angles")
+print()
+
+FK_Base_Angle_Calc = sp.Eq(FK_Base_Angle, s1 - sp.pi/2)
+FK_Forearm_Angle_Calc = sp.Eq(FK_Forearm_Angle, s2 + s3 - sp.pi)
+FK_Tool_Angle_Calc = sp.Eq(FK_Tool_Angle, s2 + s3 + s4 - 3*sp.pi/2)
+
+for Equation in [FK_Base_Angle_Calc, FK_Forearm_Angle_Calc, FK_Tool_Angle_Calc]:
+
+    sp.pprint(Equation)
+    print()
+
+print("Move from the shoulder to the elbow using the upper-arm length")
+print()
+
+FK_Elbow_r_Calc = sp.Eq(FK_Elbow_r, l2 * sp.cos(s2))
+FK_Elbow_z_Calc = sp.Eq(FK_Elbow_z, l1 + l2 * sp.sin(s2))
+
+for Equation in [FK_Elbow_r_Calc, FK_Elbow_z_Calc]:
+
+    sp.pprint(Equation)
+    print()
+
+print("Move from the elbow to the wrist using the forearm length")
+print()
+
+FK_Wrist_r_Calc = sp.Eq(FK_Wrist_r, FK_Elbow_r + l3 * sp.cos(FK_Forearm_Angle))
+FK_Wrist_z_Calc = sp.Eq(FK_Wrist_z, FK_Elbow_z + l3 * sp.sin(FK_Forearm_Angle))
+
+for Equation in [FK_Wrist_r_Calc, FK_Wrist_z_Calc]:
+
+    sp.pprint(Equation)
+    print()
+
+print("Move from the wrist to the tool tip using the final link length")
+print()
+
+FK_Tool_r_Calc = sp.Eq(FK_Tool_r, FK_Wrist_r + l4 * sp.cos(FK_Tool_Angle))
+FK_z_Calc = sp.Eq(FK_z, FK_Wrist_z + l4 * sp.sin(FK_Tool_Angle))
+
+for Equation in [FK_Tool_r_Calc, FK_z_Calc]:
+
+    sp.pprint(Equation)
+    print()
+
+print("Rotate the radial position into x and y using the base angle")
+print()
+
+FK_x_Calc = sp.Eq(FK_x, FK_Tool_r * sp.sin(FK_Base_Angle))
+FK_y_Calc = sp.Eq(FK_y, FK_Tool_r * sp.cos(FK_Base_Angle))
+
+for Equation in [FK_x_Calc, FK_y_Calc]:
+
+    sp.pprint(Equation)
+    print()
+
+Forward_Calculation_Order = [
+    FK_Base_Angle_Calc,
+    FK_Forearm_Angle_Calc,
+    FK_Tool_Angle_Calc,
+    FK_Elbow_r_Calc,
+    FK_Elbow_z_Calc,
+    FK_Wrist_r_Calc,
+    FK_Wrist_z_Calc,
+    FK_Tool_r_Calc,
+    FK_z_Calc,
+    FK_x_Calc,
+    FK_y_Calc,
+]
+
+# Keep forward substitutions separate so the servo angles remain inputs.
+Forward_Substitutions = Length_Values.copy()
+
+print("Compiling the forward equations as C")
+print()
+print("// Use the math.h include and M_PI definition printed above.")
+print("// Put these assignments inside your forward-kinematics function.")
+print("// Define s1, s2, s3 and s4 beforehand, in radians.")
+print("// Outputs: FK_x, FK_y, FK_z in mm; FK_Tool_Angle in radians.")
+print()
+
+for Equation in Forward_Calculation_Order:
+
+    Forward_Substitutions[Equation.lhs] = Equation.rhs.xreplace(Forward_Substitutions)
+
+    Expression = Equation.rhs.subs(Length_Values)
+    C_Code = sp.ccode(Expression, assign_to=str(Equation.lhs))
+
+    print("double " + C_Code)
+
+print()
+
+FK_x_Compiled = sp.Eq(FK_x, Forward_Substitutions[FK_x])
+FK_y_Compiled = sp.Eq(FK_y, Forward_Substitutions[FK_y])
+FK_z_Compiled = sp.Eq(FK_z, Forward_Substitutions[FK_z])
+FK_Tool_Angle_Compiled = sp.Eq(FK_Tool_Angle, Forward_Substitutions[FK_Tool_Angle])
+
+# ---------------------------------------------------------------------------
 # Run the calculations with example inputs
 # ---------------------------------------------------------------------------
 
@@ -301,10 +419,10 @@ print()
 Input_Values = {
     Elbow_Branch: 1,
     **Length_Values,
-    x: 0,
-    y: 110,
-    z: 50,
-    θ: 0,
+    x: 11.71,
+    y: 133.85,
+    z: 114.88,
+    θ: 2,
 }
 
 # θ is in radians.
@@ -374,6 +492,24 @@ try:
     print()
 
 
+    print("Forward calculation using the resulting servo angles")
+    print()
+
+    for Equation in [FK_x_Compiled, FK_y_Compiled, FK_z_Compiled, FK_Tool_Angle_Compiled]:
+
+        # Substitute servo values directly, without the inverse substitutions.
+        Value = float(Equation.rhs.subs(Servo_Angles).evalf())
+
+        if Equation.lhs == FK_Tool_Angle:
+
+            print(f"Tool angle = {math.degrees(Value):.6f} degrees")
+
+        else:
+
+            print(f"{Equation.lhs} = {Value:.6f} mm")
+
+    print()
+
     # -----------------------------------------------------------------------
     # Visualise the calculated arm in 3D
     # -----------------------------------------------------------------------
@@ -400,11 +536,11 @@ try:
     Upper_Arm_Angle = Servo_Angles[s2]
 
     Forearm_Angle_Value = (
-        Servo_Angles[s2] + Servo_Angles[s3] - math.pi/2
+        Servo_Angles[s2] + Servo_Angles[s3] - math.pi
     )
 
     Tool_Angle = (
-        Servo_Angles[s2] + Servo_Angles[s3] + Servo_Angles[s4] - math.pi
+        Servo_Angles[s2] + Servo_Angles[s3] + Servo_Angles[s4] - 3*math.pi/2
     )
 
     Elbow_R = float(Input_Values[l2]) * math.cos(Upper_Arm_Angle)
