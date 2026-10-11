@@ -149,16 +149,42 @@ void setup(){
 
 void loop()
 {
-    if (GetControllerState(controllerInput) && controllerInput.bButton == 1) {
-        for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-            jointServos[jointIndex].write(JointHomes[jointIndex]);
+    static bool previousB = false;
+    static bool movingHome = false;
+    static unsigned long homeStartTime = 0;
+
+    if (GetControllerState(controllerInput)) {
+        bool currentB = controllerInput.bButton == 1;
+
+        if (currentB && !previousB) {
+            for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
+                if (!jointServos[jointIndex].attached()) {
+                    jointServos[jointIndex].setPeriodHertz(50);
+                    jointServos[jointIndex].attach(
+                        JointPins[jointIndex], 500, 2400
+                    );
+                }
+
+                jointServos[jointIndex].write(JointHomes[jointIndex]);
+            }
+
+            homeStartTime = millis();
+            movingHome = true;
+
+            SendArmStatus("Moving all joints home");
         }
-        SendArmStatus("B pressed: moving all joints home");
+
+        previousB = currentB;
+    }
+
+    if (movingHome && millis() - homeStartTime >= 3000) {
+        for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
+            jointServos[jointIndex].detach();
+        }
+
+        movingHome = false;
+        SendArmStatus("Servo signals disabled");
     }
 
     delay(20);
 }
-
-
-
-
