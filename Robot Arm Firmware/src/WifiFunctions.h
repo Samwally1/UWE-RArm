@@ -18,8 +18,8 @@ bool ConnectToWiFi() {
     // Set WiFi to station mode so the board connects to a router.
     WiFi.mode(WIFI_STA);
 
-    // Start connecting using the WiFi name and password.
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    // Connect using WPA2 Enterprise (PEAP), with the username as the EAP identity.
+    WiFi.begin(WIFI_SSID, WPA2_AUTH_PEAP, WIFI_User, WIFI_User, WIFI_Password);
 
     // Record the start time in milliseconds to check for a timeout.
     unsigned long StartTime = millis();

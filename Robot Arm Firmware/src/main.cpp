@@ -8,8 +8,8 @@ void setup(){
 
 void loop()
 {
-    const RobotPosition position1 = {0.0f, 50.0f, 200.0f, 0.0f};
-    const RobotPosition position2 = {0.0f, 300.0f, 200.0f, 0.0f};
+    const RobotPosition position1 = {-100.0f, 200.0f, 100.0f, 0.0f};
+    const RobotPosition position2 = {100.0f, 200.0f, 100.0f, 0.0f};
     constexpr float speedMmPerSecond = 5;
 
     static bool moveToPosition1 = true;
