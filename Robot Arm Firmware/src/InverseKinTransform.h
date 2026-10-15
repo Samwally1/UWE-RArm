@@ -43,7 +43,11 @@ inline bool AreAnglesWithinCalibrationLimits(const RobotAngles& angles)
 {
     const float jointAngles[4] = {angles.s1, angles.s2, angles.s3, angles.s4};
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-        const float servoDegrees = degrees(jointAngles[jointIndex]);
+        // Servo commands are whole degrees.  Comparing the raw floating-point
+        // result can reject an exact trained limit, e.g. 115.00001 degrees.
+        const int servoDegrees = static_cast<int>(lroundf(
+            degrees(jointAngles[jointIndex])
+        ));
         const int minimum = min(JointLims[jointIndex][0], JointLims[jointIndex][1]);
         const int maximum = max(JointLims[jointIndex][0], JointLims[jointIndex][1]);
         if (servoDegrees < minimum || servoDegrees > maximum) {
@@ -101,7 +105,24 @@ inline bool CalculateElbowBranch(const RobotPosition& target, float theta,
     const float forearmAngle = atan2f(wristZ - elbowZ, wristR - elbowR);
     angles.s3 = forearmAngle - angles.s2 + PI;
     angles.s4 = -angles.s2 - angles.s3 + theta + (3.0f * HALF_PI);
-    return IsFiniteAngleSet(angles) && AreAnglesWithinCalibrationLimits(angles);
+    if (!IsFiniteAngleSet(angles)) {
+        return false;
+    }
+    if (!AreAnglesWithinCalibrationLimits(angles)) {
+        Serial.printf(
+            "IK branch %d rejected by limits | Angles: %.1f, %.1f, %.1f, %.1f | "
+            "Limits: [%d,%d], [%d,%d], [%d,%d], [%d,%d]\\n",
+            elbowBranch,
+            degrees(angles.s1), degrees(angles.s2),
+            degrees(angles.s3), degrees(angles.s4),
+            JointLims[0][0], JointLims[0][1],
+            JointLims[1][0], JointLims[1][1],
+            JointLims[2][0], JointLims[2][1],
+            JointLims[3][0], JointLims[3][1]
+        );
+        return false;
+    }
+    return true;
 }
 
 // Tests both elbow configurations.  On failure outputAngles is unchanged.
