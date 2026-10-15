@@ -14,7 +14,7 @@ void loop()
     const RobotPosition position4 = {0.0f, 200.0f, 100.0f, 0.0f};
     const RobotPosition position5 = {100.0f, 200.0f, 100.0f, 0.0f};
 
-    constexpr float speedMmPerSecond = 50;
+    constexpr float speedMmPerSecond = 100;
 
     static size_t nextPositionIndex = 0;
     static bool hasPreviousPosition = false;
