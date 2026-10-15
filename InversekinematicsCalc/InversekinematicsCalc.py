@@ -1,6 +1,7 @@
 import sympy as sp
 import math
 import matplotlib.pyplot as plt
+import numpy as np
 
 print()
 print("Initialising Arm Lengths - l1, l2, l3, l4")
@@ -646,6 +647,76 @@ try:
 
     Axis.set_title("Robot Arm — Calculated Joint Positions")
     Axis.legend()
+
+    # 3D workspace: apply the shoulder-to-wrist reach test to a volume of
+    # X/Y/Z targets at the requested tool angle.  This shows geometric
+    # link-length limits; physical servo travel limits are unknown.
+    print("Creating a 3D X/Y/Z valid-volume visualisation")
+    print()
+
+    Tool_Length = float(Input_Values[l4])
+    Tool_Angle_Request = float(Input_Values[θ])
+    Minimum_Wrist_Distance = abs(float(Input_Values[l2] - Input_Values[l3]))
+    Maximum_Wrist_Distance = float(Input_Values[l2] + Input_Values[l3])
+
+    Plot_Limit = Maximum_Wrist_Distance + Tool_Length + 20
+    Z_Centre = Shoulder_Height + Tool_Length * math.sin(Tool_Angle_Request)
+    Z_Lower = Z_Centre - Maximum_Wrist_Distance - 20
+    Z_Upper = Z_Centre + Maximum_Wrist_Distance + 20
+
+    # A regular sample is sufficient to show the reachable volume while
+    # keeping the interactive matplotlib window responsive.
+    Grid_Axis = np.linspace(-Plot_Limit, Plot_Limit, 85)
+    Grid_Z_Axis = np.linspace(Z_Lower, Z_Upper, 85)
+    Grid_X, Grid_Y, Grid_Z = np.meshgrid(
+        Grid_Axis, Grid_Axis, Grid_Z_Axis, indexing="ij"
+    )
+    Grid_Reach = np.hypot(Grid_X, Grid_Y)
+    Grid_Wrist_Reach = Grid_Reach - Tool_Length * math.cos(Tool_Angle_Request)
+    Grid_Shoulder_Wrist_Distance = np.hypot(
+        Grid_Wrist_Reach,
+        Grid_Z - Tool_Length * math.sin(Tool_Angle_Request) - Shoulder_Height
+    )
+    Valid_Target = (
+        (Grid_Wrist_Reach >= 0)
+        & (Grid_Shoulder_Wrist_Distance >= Minimum_Wrist_Distance)
+        & (Grid_Shoulder_Wrist_Distance <= Maximum_Wrist_Distance)
+    )
+
+    Valid_X = Grid_X[Valid_Target]
+    Valid_Y = Grid_Y[Valid_Target]
+    Valid_Z = Grid_Z[Valid_Target]
+
+    # Limit the rendered points, rather than the calculation resolution.
+    Max_Display_Points = 40000
+    Display_Step = max(1, math.ceil(len(Valid_X) / Max_Display_Points))
+
+    Workspace_Figure = plt.figure()
+    Workspace_Axis = Workspace_Figure.add_subplot(111, projection="3d")
+    Workspace_Axis.scatter(
+        Valid_X[::Display_Step], Valid_Y[::Display_Step],
+        Valid_Z[::Display_Step], color="#55a868", s=2, alpha=0.12,
+        label="Geometrically valid volume",
+    )
+    Workspace_Axis.scatter(
+        0, 0, 0, color="black", marker="o", s=45, label="Base"
+    )
+    Workspace_Axis.scatter(
+        Target_X, Target_Y, Target_Z, color="red", marker="x", s=100,
+        linewidths=2, label="Requested target",
+    )
+    Workspace_Axis.set_xlim(-Plot_Limit, Plot_Limit)
+    Workspace_Axis.set_ylim(-Plot_Limit, Plot_Limit)
+    Workspace_Axis.set_zlim(Z_Lower, Z_Upper)
+    Workspace_Axis.set_box_aspect((1, 1, 1))
+    Workspace_Axis.set_xlabel("X (mm)")
+    Workspace_Axis.set_ylabel("Y (mm)")
+    Workspace_Axis.set_zlabel("Z (mm)")
+    Workspace_Axis.set_title(
+        "3D workspace — valid targets shown in green\n"
+        f"Tool angle = {math.degrees(Tool_Angle_Request):.1f}°"
+    )
+    Workspace_Axis.legend()
 
     plt.show()
 
