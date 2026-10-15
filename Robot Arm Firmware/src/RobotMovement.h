@@ -60,17 +60,22 @@ void CommandJointAngles(const RobotAngles& angles)
                                 JointLims[jointIndex][1]);
         const int maximum = max(JointLims[jointIndex][0],
                                 JointLims[jointIndex][1]);
-        const int logicalAngle = constrain(
-            static_cast<int>(lroundf(angleDegrees)), minimum, maximum
+        const float logicalAngle = constrain(
+            angleDegrees, static_cast<float>(max(0, minimum)),
+            static_cast<float>(min(180, maximum))
         );
-        jointServos[jointIndex].write(
-            ServoCommandAngle(jointIndex, logicalAngle)
-        );
+        const bool inverted = JointLims[jointIndex][0] > JointLims[jointIndex][1];
+        const float servoAngle = inverted ? 180.0f - logicalAngle : logicalAngle;
+        // Preserve fractional degrees instead of stepping in whole degrees.
+        const int pulseUs = static_cast<int>(lroundf(
+            500.0f + servoAngle * (2400.0f - 500.0f) / 180.0f
+        ));
+        jointServos[jointIndex].writeMicroseconds(pulseUs);
     }
 }
 
 
-// speedMmPerSecond controls the Cartesian travel speed, in millimetres/second.
+// speedMmPerSecond caps the peak Cartesian speed, in millimetres/second.
 bool CommandJointAnglesLinear(const RobotPosition& positions,
                               const RobotPosition& prevpositions,
                               float speedMmPerSecond)
@@ -94,9 +99,15 @@ bool CommandJointAnglesLinear(const RobotPosition& positions,
         deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ
     );
     constexpr unsigned long controlIntervalMs = 20;
-    const float moveDurationMs = distanceMm * 1000.0f / speedMmPerSecond;
+    // Quintic easing has a peak slope of 1.875. Extend the duration so the
+    // requested speed remains the peak speed, with zero speed/acceleration
+    // at both ends. Also give orientation-only moves a gradual transition.
+    const float moveDurationMs = max(
+        500.0f, max(1.875f * distanceMm * 1000.0f / speedMmPerSecond,
+                    1.875f * fabsf(deltaA) * 1000.0f / 30.0f)
+    );
     Serial.printf(
-        "Linear move: %.1f mm at %.1f mm/s (%.1f s)\\n",
+        "Linear move: %.1f mm at %.1f mm/s (%.1f s)\n",
         distanceMm, speedMmPerSecond, moveDurationMs / 1000.0f
     );
 
@@ -116,11 +127,14 @@ bool CommandJointAnglesLinear(const RobotPosition& positions,
             ? min(1.0f, elapsedMs / moveDurationMs)
             : 1.0f;
 
+        const float easedProgress = progress * progress * progress
+            * (10.0f + progress * (-15.0f + 6.0f * progress));
+
         const RobotPosition targetPosition = {
-            currentPosition.x + deltaX * progress,
-            currentPosition.y + deltaY * progress,
-            currentPosition.z + deltaZ * progress,
-            currentPosition.angle + deltaA * progress,
+            currentPosition.x + deltaX * easedProgress,
+            currentPosition.y + deltaY * easedProgress,
+            currentPosition.z + deltaZ * easedProgress,
+            currentPosition.angle + deltaA * easedProgress,
         };
 
         RobotAngles nextAngles;
@@ -131,7 +145,7 @@ bool CommandJointAnglesLinear(const RobotPosition& positions,
             targetAngles = nextAngles;
         } else {
             Serial.printf(
-                "Linear movement path is unreachable at %.0f%%\\n",
+                "Linear movement path is unreachable at %.0f%%\n",
                 progress * 100.0f
             );
             return false;

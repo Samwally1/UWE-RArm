@@ -9,10 +9,14 @@ void setup(){
 void loop()
 {
     const RobotPosition position1 = {-100.0f, 200.0f, 100.0f, 0.0f};
-    const RobotPosition position2 = {100.0f, 200.0f, 100.0f, 0.0f};
-    constexpr float speedMmPerSecond = 5;
+    const RobotPosition position2 = {0.0f, 200.0f, 100.0f, 0.0f};
+    const RobotPosition position3 = {0.0f, 200.0f, 300.0f, 0.0f};
+    const RobotPosition position4 = {0.0f, 200.0f, 100.0f, 0.0f};
+    const RobotPosition position5 = {100.0f, 200.0f, 100.0f, 0.0f};
 
-    static bool moveToPosition1 = true;
+    constexpr float speedMmPerSecond = 50;
+
+    static size_t nextPositionIndex = 0;
     static bool hasPreviousPosition = false;
     static RobotPosition previousPosition;
 
@@ -20,7 +24,7 @@ void loop()
         previousPosition = ForwardKinTransform(targetAngles);
         hasPreviousPosition = true;
         Serial.printf(
-            "Starting from X: %.1f, Y: %.1f, Z: %.1f, Angle: %.1f\\n",
+            "Starting from X: %.1f, Y: %.1f, Z: %.1f, Angle: %.1f\n",
             previousPosition.x,
             previousPosition.y,
             previousPosition.z,
@@ -28,13 +32,15 @@ void loop()
         );
     }
 
-    const RobotPosition& nextPosition = moveToPosition1
-        ? position1
-        : position2;
-    const int positionNumber = moveToPosition1 ? 1 : 2;
+    const RobotPosition positions[] = {
+        position1, position2, position3, position4, position5
+    };
+    constexpr size_t positionCount = sizeof(positions) / sizeof(positions[0]);
+    const RobotPosition& nextPosition = positions[nextPositionIndex];
+    const int positionNumber = static_cast<int>(nextPositionIndex) + 1;
 
     Serial.printf(
-        "Moving to position %d | X: %.1f, Y: %.1f, Z: %.1f, Angle: %.1f\\n",
+        "Moving to position %d | X: %.1f, Y: %.1f, Z: %.1f, Angle: %.1f\n",
         positionNumber,
         nextPosition.x,
         nextPosition.y,
@@ -44,12 +50,13 @@ void loop()
     if (CommandJointAnglesLinear(
             nextPosition, previousPosition, speedMmPerSecond
         )) {
-        Serial.printf("Reached position %d\\n", positionNumber);
+        Serial.printf("Reached position %d\n", positionNumber);
         previousPosition = nextPosition;
-        moveToPosition1 = !moveToPosition1;
+        nextPositionIndex = (nextPositionIndex + 1) % positionCount;
         delay(1000);
     } else {
-        Serial.printf("Position %d was not reached; retrying in 2 seconds\\n",
+        previousPosition = ForwardKinTransform(targetAngles);
+        Serial.printf("Position %d was not reached; retrying in 2 seconds\n",
                       positionNumber);
         delay(2000);
     }
