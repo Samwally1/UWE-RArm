@@ -40,6 +40,7 @@ inline bool ExecuteMovementPacket(const String& packet, RobotAngles& currentAngl
 {
     int cursor = 0;
     unsigned long previousTimestamp = 0;
+    const unsigned long movementStartTime = millis();
     bool executedCommand = false;
 
     while (cursor < packet.length()) {
@@ -72,7 +73,13 @@ inline bool ExecuteMovementPacket(const String& packet, RobotAngles& currentAngl
         if (timestamp < previousTimestamp) {
             return false;
         }
-        delay(timestamp - previousTimestamp);
+
+        // Run each packet command at its elapsed timestamp.  This is based on
+        // one timer started for the packet, rather than accumulating delays.
+        while (millis() - movementStartTime < timestamp) {
+            delay(1);
+        }
+
         previousTimestamp = timestamp;
         for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
             jointServos[jointIndex].write(ServoCommandAngle(

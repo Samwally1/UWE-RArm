@@ -89,7 +89,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             try:
-                angle_packet = CompileAnglePacket(current_cords, TargetCords, 10, 5)
+                angle_packet = CompileAnglePacket(current_cords, TargetCords, 10, 5)#
+                print(angle_packet)
             except (ValueError, ZeroDivisionError, OverflowError):
                 self.send_error(422, "Unable to compile movement packet")
                 return
