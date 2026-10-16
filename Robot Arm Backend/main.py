@@ -9,7 +9,14 @@ from AnglePacketCompilation import Angles, Coordinates, CompileAnglePacket
 
 controller_state = {}
 arm_status = ""
-calibration_data = None
+# Safe startup calibration.  A later successful POST to /calibration replaces
+# these values for the lifetime of the backend process.
+#
+# Joint 3's reversed limits intentionally preserve its inverted-servo setup.
+calibration_data = {
+    "jointLimits": [[15, 180], [0, 131], [154, 21], [0, 180]],
+    "jointHomes": [92, 128, 28, 112],
+}
 arm_mode = os.getenv("ARM_MODE", "Normal")
 
 TargetCords = Coordinates(0, 250, 250 , 0)

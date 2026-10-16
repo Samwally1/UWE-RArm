@@ -118,7 +118,14 @@ void StartupProcess(){
                     }
                 }
 
-                angleOutputs[operationIndex] = static_cast<int>(targetPosition.angle);
+                // Store exactly the same safe angle that is sent to the servo.
+                // This prevents an out-of-range controller position from being
+                // saved as calibration data and rejected by the backend.
+                angleOutputs[operationIndex] = constrain(
+                    static_cast<int>(targetPosition.angle),
+                    0,
+                    180
+                );
 
                 // Once both end limits are known, apply the joint's direction
                 // convention while the operator selects its home position.
