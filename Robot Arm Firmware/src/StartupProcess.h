@@ -1,9 +1,8 @@
 #include <Arduino.h>
-#include <ESP32Servo.h>
 #include "WifiFunctions.h"
 #include "SticksToXYZ.h"
-#include "InverseKinTransform.h"
 #include "CalibrationFuncs.h"
+#include "RobotMovement.h"
 
 static unsigned long lastPositionUpdateTime = 0;
 static unsigned long lastPositionPrintTime = 0;

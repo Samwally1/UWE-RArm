@@ -1,12 +1,16 @@
 import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
+from AnglePacketCompilation import Angles, Coordinates, CompileAnglePacket
 
 
 controller_state = {}
 arm_status = ""
 calibration_data = None
 arm_mode = os.getenv("ARM_MODE", "Normal")
+
+TargetCords = Coordinates(0, 250, 250 , 0)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -44,6 +48,48 @@ class Handler(BaseHTTPRequestHandler):
             response = json.dumps(calibration_data, separators=(",", ":")).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
+
+        elif urlparse(self.path).path == "/UpdateMovement":
+            # The ESP32 supplies its measured Cartesian position as query
+            # parameters.  GET requests do not have a reliable request body.
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                current_cords = Coordinates(
+                    float(query["x"][0]),
+                    float(query["y"][0]),
+                    float(query["z"][0]),
+                    float(query["a"][0]),
+                )
+            except (KeyError, IndexError, TypeError, ValueError):
+                self.send_error(400, "x, y, z and a query parameters are required")
+                return
+
+            # Do not tell the arm to move when it has reached the target.
+            if (
+                current_cords.X == TargetCords.X
+                and current_cords.Y == TargetCords.Y
+                and current_cords.Z == TargetCords.Z
+                and current_cords.A == TargetCords.A
+            ):
+                self.send_response(204)
+                self.end_headers()
+                return
+
+            try:
+                angle_packet = CompileAnglePacket(current_cords, TargetCords, 10, 5)
+            except (ValueError, ZeroDivisionError, OverflowError):
+                self.send_error(422, "Unable to compile movement packet")
+                return
+
+            # One timestamped servo command per line.  Keeping this in the
+            # response body avoids HTTP header-size limits for long moves.
+            response = ("\n".join(angle_packet) + "\n").encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Content-Length", str(len(response)))
             self.end_headers()
             self.wfile.write(response)

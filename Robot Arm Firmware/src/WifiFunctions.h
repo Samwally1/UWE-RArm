@@ -18,8 +18,13 @@ bool ConnectToWiFi() {
     // Set WiFi to station mode so the board connects to a router.
     WiFi.mode(WIFI_STA);
 
-    // Connect using WPA2 Enterprise (PEAP), with the username as the EAP identity.
-    WiFi.begin(WIFI_SSID, WPA2_AUTH_PEAP, WIFI_User, WIFI_User, WIFI_Password);
+    // Use WPA2 Enterprise (PEAP) only when a username is configured. An empty
+    // username indicates a standard WPA/WPA2 personal network.
+    if (WIFI_User != nullptr && WIFI_User[0] != '\0') {
+        WiFi.begin(WIFI_SSID, WPA2_AUTH_PEAP, WIFI_User, WIFI_User, WIFI_Password);
+    } else {
+        WiFi.begin(WIFI_SSID, WIFI_Password);
+    }
 
     // Record the start time in milliseconds to check for a timeout.
     unsigned long StartTime = millis();
@@ -185,7 +190,6 @@ bool GetControllerState(StickInput& input)
     static WiFiClientSecure client;
     static HTTPClient http;
     static bool requestInitialised = false;
-    static String lastState;
     static unsigned long lastRequestTime = 0;
     constexpr unsigned long pollIntervalMs = 20;
 
@@ -219,9 +223,6 @@ bool GetControllerState(StickInput& input)
     const int statusCode = http.GET();
     if (statusCode == HTTP_CODE_OK) {
         const String state = http.getString();
-        if (state != lastState) {
-            lastState = state;
-        }
 
         if (!DecodeStickInput(state, input)) {
             Serial.println("Invalid controller state");
@@ -276,4 +277,34 @@ void SendArmStatus(const String& armStatus)
     }
 
     http.end();
+}
+
+// Returns false for both "already at target" (HTTP 204) and request errors.
+// On success packet contains one line per command:
+// milliseconds/S1-deg/S2-deg/S3-deg/S4-deg
+bool GetMovementPacket(const RobotPosition& currentPosition, String& packet)
+{
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    const String movementUrl = "https://" + String(HOST) + "/UpdateMovement?x="
+        + String(currentPosition.x, 3) + "&y=" + String(currentPosition.y, 3)
+        + "&z=" + String(currentPosition.z, 3) + "&a="
+        + String(currentPosition.angle, 3);
+    if (!http.begin(client, movementUrl)) {
+        return false;
+    }
+
+    const int statusCode = http.GET();
+    if (statusCode == HTTP_CODE_OK) {
+        packet = http.getString();
+        http.end();
+        return packet.length() > 0;
+    }
+    http.end();
+    return false;
 }

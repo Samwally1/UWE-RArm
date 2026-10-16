@@ -259,15 +259,10 @@ Calculation_Order = [
 
 Substitutions = Length_Values.copy()
 
-print("// Copy the include and M_PI definition to the top of your C file.")
-print("#include <math.h>")
-print("#ifndef M_PI")
-print("#define M_PI 3.14159265358979323846")
-print("#endif")
+print("# Python output (the script already imports math).")
 print()
-print("// Put these assignments inside your function.")
-print("// Define x, y, z, theta and Elbow_Branch beforehand.")
-print("// Elbow_Branch must be 1 or -1. All angles are in radians.")
+print("# Define x, y, z, theta and Elbow_Branch beforehand.")
+print("# Elbow_Branch must be 1 or -1. All angles are in radians.")
 print()
 
 for Equation in Calculation_Order:
@@ -276,12 +271,12 @@ for Equation in Calculation_Order:
 
     Expression = Equation.rhs.subs(Length_Values)
 
-    # Use an ASCII variable name in the generated C code.
+    # Use an ASCII variable name in the generated Python code.
     Expression = Expression.subs(θ, sp.Symbol("theta"))
 
-    C_Code = sp.ccode(Expression, assign_to=str(Equation.lhs))
+    Python_Code = sp.pycode(Expression)
 
-    print("double " + C_Code)
+    print(f"{Equation.lhs} = {Python_Code}")
 
 print()
 
@@ -386,12 +381,11 @@ Forward_Calculation_Order = [
 # Keep forward substitutions separate so the servo angles remain inputs.
 Forward_Substitutions = Length_Values.copy()
 
-print("Compiling the forward equations as C")
+print("Compiling the forward equations as Python")
 print()
-print("// Use the math.h include and M_PI definition printed above.")
-print("// Put these assignments inside your forward-kinematics function.")
-print("// Define s1, s2, s3 and s4 beforehand, in radians.")
-print("// Outputs: FK_x, FK_y, FK_z in mm; FK_Tool_Angle in radians.")
+print("# The script already imports math.")
+print("# Define s1, s2, s3 and s4 beforehand, in radians.")
+print("# Outputs: FK_x, FK_y, FK_z in mm; FK_Tool_Angle in radians.")
 print()
 
 for Equation in Forward_Calculation_Order:
@@ -399,9 +393,9 @@ for Equation in Forward_Calculation_Order:
     Forward_Substitutions[Equation.lhs] = Equation.rhs.xreplace(Forward_Substitutions)
 
     Expression = Equation.rhs.subs(Length_Values)
-    C_Code = sp.ccode(Expression, assign_to=str(Equation.lhs))
+    Python_Code = sp.pycode(Expression)
 
-    print("double " + C_Code)
+    print(f"{Equation.lhs} = {Python_Code}")
 
 print()
 
