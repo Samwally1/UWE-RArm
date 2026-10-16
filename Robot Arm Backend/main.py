@@ -2,7 +2,7 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
-from AnglePacketCompilation import Angles, Coordinates, CompileAnglePacket
+from .AnglePacketCompilation import Angles, Coordinates, CompileAnglePacket
 
 
 controller_state = {}

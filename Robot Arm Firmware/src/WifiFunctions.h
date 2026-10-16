@@ -229,6 +229,7 @@ bool GetControllerState(StickInput& input)
             return false;
         }
 
+        Serial.println("Controller packet received");
         return true;
     } else if (statusCode > 0) {
         Serial.printf("Controller HTTP error: %d\n", statusCode);
