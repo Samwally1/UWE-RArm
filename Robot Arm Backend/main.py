@@ -2,7 +2,9 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
-from .AnglePacketCompilation import Angles, Coordinates, CompileAnglePacket
+# main.py is run directly by the Docker entrypoint, so this must be an
+# absolute (same-directory) import rather than a package-relative import.
+from AnglePacketCompilation import Angles, Coordinates, CompileAnglePacket
 
 
 controller_state = {}
