@@ -22,6 +22,8 @@ bool GetMovementPacket(const RobotAngles& currentAngles, String& packet, String&
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
+    http.setConnectTimeout(3000);
+    http.setTimeout(3000);
     // Send logical joint degrees; the backend calculates Cartesian position.
     const String movementUrl = "https://" + String(HOST) + "/UpdateMovement?s1="
         + String(degrees(currentAngles.s1), 3) + "&s2=" + String(degrees(currentAngles.s2), 3)
@@ -67,6 +69,8 @@ bool SendMovementComplete(const String& movementId)
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
+    http.setConnectTimeout(3000);
+    http.setTimeout(3000);
     const String url = "https://" + String(HOST) + "/movement-complete";
     if (!http.begin(client, url)) {
         Serial.println("[ERROR][Movement] Cannot initialise completion request");
@@ -75,6 +79,12 @@ bool SendMovementComplete(const String& movementId)
     http.addHeader("Movement-ID", movementId);
     const int statusCode = http.POST("");
     http.end();
+    if (statusCode == HTTP_CODE_CONFLICT) {
+        // A restarted backend or another client can replace the movement ID.
+        // Resume polling from our last commanded angles instead of retrying forever.
+        Serial.println("[Movement] Completion ID expired; resuming target polling");
+        return true;
+    }
     if (statusCode != HTTP_CODE_NO_CONTENT) {
         Serial.printf("[ERROR][Movement] Completion POST failed: %d; will retry\n", statusCode);
         return false;
