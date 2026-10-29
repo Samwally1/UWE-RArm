@@ -8,4 +8,4 @@ __pycache__/
 # Passwords and local settings
 .env
 
-Robot Arm Firmware/src/Secrets.h
+Robot Arm Firmware/src/**/Secrets.h
