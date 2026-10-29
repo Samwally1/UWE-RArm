@@ -62,6 +62,27 @@ class MovementApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["status"], "complete")
 
+    def test_target_query_parameters(self):
+        self.assertEqual(self.request("POST", "/target?X=200&Y=200&Z=200&A=0")[0], 204)
+        self.assertEqual((state.TargetCords.X, state.TargetCords.Y, state.TargetCords.Z),
+                         (200, 200, 200))
+        self.assertEqual(self.request("POST", "/target?X=0&Y=250&Z=250&A=10&Speed=20")[0], 204)
+        self.assertAlmostEqual(state.TargetCords.A, math.radians(10))
+        self.assertEqual(state.TargetSpeed, 20)
+
+    def test_invalid_target_query_preserves_state(self):
+        original = state.TargetCords
+        for query in ("X=0", "X=&Y=250&Z=250&A=0", "X=nan&Y=250&Z=250&A=0",
+                      "X=0&X=1&Y=250&Z=250&A=0", "X=0&Y=250&Z=250&A=0&Speed=0"):
+            self.assertEqual(self.request("POST", "/target?" + query)[0], 400)
+            self.assertIs(state.TargetCords, original)
+            self.assertEqual(state.TargetSpeed, 10)
+
+    def test_target_headers_take_precedence(self):
+        self.assertEqual(self.request("POST", "/target?X=invalid&Y=250&Z=250&A=0",
+                                     {"X": "0"})[0], 204)
+        self.assertEqual(state.TargetCords.X, 0)
+
     def test_bad_completion_ids(self):
         self.assertEqual(self.request("POST", "/movement-complete")[0], 400)
         self.assertEqual(self.request("POST", "/movement-complete",

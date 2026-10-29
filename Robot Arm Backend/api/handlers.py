@@ -105,12 +105,26 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        if self.path == "/target":
+        target_url = urlparse(self.path)
+        if target_url.path == "/target":
+            query = parse_qs(target_url.query, keep_blank_values=True)
+
+            def target_value(name, default=None):
+                # Headers take precedence for existing clients.
+                if name in self.headers:
+                    return self.headers[name]
+                values = query.get(name)
+                if values is None:
+                    return default
+                if len(values) != 1:
+                    raise ValueError("Duplicate target parameter")
+                return values[0]
+
             try:
-                x, y, z, a = (float(self.headers[name]) for name in ("X", "Y", "Z", "A"))
+                x, y, z, a = (float(target_value(name)) for name in ("X", "Y", "Z", "A"))
                 if not all(math.isfinite(value) for value in (x, y, z, a)):
                     raise ValueError("Non-finite coordinate")
-                speed = float(self.headers.get("Speed", state.TargetSpeed))
+                speed = float(target_value("Speed", state.TargetSpeed))
                 if not math.isfinite(speed) or not 0 < speed <= state.MAX_SPEED:
                     raise ValueError("Invalid speed")
                 candidate = Coordinates(x, y, z, math.radians(a))
