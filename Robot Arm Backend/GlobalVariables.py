@@ -22,6 +22,7 @@ calibration_data = {
     "jointLimits": [[15, 180], [0, 131], [154, 21], [0, 180]],
     "jointHomes": [92, 128, 28, 112],
 }
+
 arm_mode = os.getenv("ARM_MODE", "Normal")
 
 TargetCords = Coordinates(0, 250, 250 , 0)
