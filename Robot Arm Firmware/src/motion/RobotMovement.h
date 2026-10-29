@@ -5,10 +5,15 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <memory>
+#include <new>
 #include <ESP32Servo.h>
 #include "../config/RobotCharacteristics.h"
 #include "../core/RobotTypes.h"
 
+
+constexpr int ServoMinPulseUs = 500;
+constexpr int ServoMaxPulseUs = 2400;
 
 Servo jointServos[4];
 
@@ -40,6 +45,16 @@ int ServoCommandAngle(int jointIndex, int logicalAngle)
     return inverted ? 180 - clampedAngle : clampedAngle;
 }
 
+// Keep fractional degrees until the final pulse-width conversion.
+inline void WriteJointAngle(int jointIndex, float logicalAngle)
+{
+    const float clampedAngle = constrain(logicalAngle, 0.0f, 180.0f);
+    const bool inverted = JointLims[jointIndex][0] > JointLims[jointIndex][1];
+    const float commandAngle = inverted ? 180.0f - clampedAngle : clampedAngle;
+    const int pulseUs = static_cast<int>(lroundf(
+        ServoMinPulseUs + commandAngle * (ServoMaxPulseUs - ServoMinPulseUs) / 180.0f));
+    jointServos[jointIndex].writeMicroseconds(pulseUs);
+}
 // Packet: step count, interval in milliseconds, then steps + 1 timestamped rows.
 inline bool ReadMovementUnsigned(const String& text, unsigned long& value)
 {
@@ -76,12 +91,19 @@ inline bool ExecuteMovementPacket(const String& packet)
         return false;
     }
 
-    // Validate the entire packet before issuing any servo commands.
-    const int rowsStart = cursor;
-    for (int pass = 0; pass < 2; ++pass) {
-        cursor = rowsStart;
-        unsigned long previousTime = 0;
-        const unsigned long movementStart = millis();
+    // Parse once before playback: no string allocation or float parsing at deadlines.
+    struct MovementRow {
+        unsigned long timestamp;
+        float angles[4];
+    };
+    if (steps >= SIZE_MAX / sizeof(MovementRow)) return false;
+    std::unique_ptr<MovementRow[]> rows(new (std::nothrow) MovementRow[steps + 1]);
+    if (!rows) {
+        Serial.println("[ERROR][Movement] Insufficient memory for playback rows");
+        return false;
+    }
+    unsigned long previousTime = 0;
+    {
         for (unsigned long row = 0; row <= steps; ++row) {
             if (!ReadMovementLine(packet, cursor, line)) {
                 Serial.println("[ERROR][Movement] Missing command row");
@@ -115,16 +137,9 @@ inline bool ExecuteMovementPacket(const String& packet)
                 }
                 start = end + 1;
             }
-            if (pass == 1) {
-                while (static_cast<unsigned long>(millis() - movementStart) < timestamp) {
-                    delay(1);
-                }
-                for (int joint = 0; joint < 4; ++joint) {
-                    jointServos[joint].write(ServoCommandAngle(
-                        joint, static_cast<int>(lroundf(angles[joint]))));
-                }
-                targetAngles = {static_cast<float>(radians(angles[0])), static_cast<float>(radians(angles[1])),
-                                static_cast<float>(radians(angles[2])), static_cast<float>(radians(angles[3]))};
+            rows[row].timestamp = timestamp;
+            for (int joint = 0; joint < 4; ++joint) {
+                rows[row].angles[joint] = angles[joint];
             }
         }
         if (packet.substring(cursor).length() > 0) {
@@ -135,6 +150,18 @@ inline bool ExecuteMovementPacket(const String& packet)
                 return false;
             }
         }
+    }
+    const unsigned long movementStart = millis();
+    for (unsigned long row = 0; row <= steps; ++row) {
+        while (static_cast<unsigned long>(millis() - movementStart) < rows[row].timestamp) {
+            delay(1);
+        }
+        const float* angles = rows[row].angles;
+        for (int joint = 0; joint < 4; ++joint) {
+            WriteJointAngle(joint, angles[joint]);
+        }
+        targetAngles = {static_cast<float>(radians(angles[0])), static_cast<float>(radians(angles[1])),
+                        static_cast<float>(radians(angles[2])), static_cast<float>(radians(angles[3]))};
     }
     return true;
 }

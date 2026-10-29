@@ -24,7 +24,7 @@ void StartupProcess(){
 
     for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
         jointServos[jointIndex].setPeriodHertz(50);
-        jointServos[jointIndex].attach(JointPins[jointIndex], 500, 2400);
+        jointServos[jointIndex].attach(JointPins[jointIndex], ServoMinPulseUs, ServoMaxPulseUs);
         jointServos[jointIndex].write(ServoCommandAngle(jointIndex, 90));
     }
 
@@ -77,7 +77,7 @@ void StartupProcess(){
 
             if (!jointServos[jointIndex].attached()) {
                 jointServos[jointIndex].setPeriodHertz(50);
-                jointServos[jointIndex].attach(JointPins[jointIndex], 500, 2400);
+                jointServos[jointIndex].attach(JointPins[jointIndex], ServoMinPulseUs, ServoMaxPulseUs);
             }
 
             for (int operationIndex = 0; operationIndex < 3; ++operationIndex) {

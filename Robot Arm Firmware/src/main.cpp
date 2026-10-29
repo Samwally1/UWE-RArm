@@ -28,9 +28,7 @@ void loop()
                 targetAngles.s4,
             };
             for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-                jointServos[jointIndex].write(ServoCommandAngle(
-                    jointIndex, static_cast<int>(lroundf(degrees(angles[jointIndex])))
-                ));
+                WriteJointAngle(jointIndex, degrees(angles[jointIndex]));
             }
         }
         SendMovementComplete();
