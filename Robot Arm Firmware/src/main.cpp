@@ -9,7 +9,7 @@ void setup()
 
 void loop()
 {
-    static String pendingCompletion;
+    static bool completionPending = false;
     static unsigned long lastRequestTime = 0;
     static unsigned long lastReconnectTime = 0;
     static bool requested = false;
@@ -30,7 +30,7 @@ void loop()
 
     // Complete the previous packet before requesting another. Retry failed
     // acknowledgements once per second; idle target checks run every 100 ms.
-    const unsigned long interval = pendingCompletion.length() > 0 ? 1000 : 100;
+    const unsigned long interval = completionPending ? 1000 : 100;
     if (requested && now - lastRequestTime < interval) {
         delay(1);
         return;
@@ -38,19 +38,18 @@ void loop()
     requested = true;
     lastRequestTime = now;
 
-    if (pendingCompletion.length() > 0) {
-        if (!SendMovementComplete(pendingCompletion)) {
+    if (completionPending) {
+        if (!SendMovementComplete()) {
             return;
         }
-        pendingCompletion = "";
+        completionPending = false;
     }
 
     String movementPacket;
-    String movementId;
-    if (GetMovementPacket(targetAngles, movementPacket, movementId)) {
-        Serial.printf("[Movement] Executing packet: %s\n", movementId.c_str());
+    if (GetMovementPacket(targetAngles, movementPacket)) {
+        Serial.printf("[Movement] Received packet: %u bytes\n", movementPacket.length());
         if (ExecuteMovementPacket(movementPacket, targetAngles)) {
-            pendingCompletion = movementId;
+            completionPending = true;
             // Attempt completion immediately on the next loop iteration.
             requested = false;
         } else {

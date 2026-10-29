@@ -12,7 +12,7 @@ def print_movement_state_forever():
         print(
             f"TargetCords = {state.TargetCords}\n"
             f"TargetSpeed = {state.TargetSpeed}\n"
-            f"movement_state = {state.movement_state}",
+            f"arm_moving = {state.arm_moving}",
             flush=True,
         )
         time.sleep(1)

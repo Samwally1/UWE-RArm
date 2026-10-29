@@ -1,7 +1,6 @@
 import json
 import math
 import GlobalVariables as state
-import uuid
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 from models.robot import Angles, Coordinates
@@ -29,7 +28,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
         elif self.path == "/movement":
-            response = json.dumps(state.movement_state).encode("utf-8")
+            response = json.dumps(state.arm_moving).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(response)))
@@ -57,7 +56,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
         elif urlparse(self.path).path == "/UpdateMovement":
-            if state.movement_state["moving"]:
+            if state.arm_moving:
                 self.send_response(204)
                 self.end_headers()
                 return
@@ -92,16 +91,9 @@ class Handler(BaseHTTPRequestHandler):
             # One timestamped servo command per line.  Keeping this in the
             # response body avoids HTTP header-size limits for long moves.
             response = ("\n".join(angle_packet) + "\n").encode("utf-8")
-            movement_id = uuid.uuid4().hex
-            state.movement_state.update(
-                id=movement_id, status="in_progress", moving=True,
-                target={"x": state.TargetCords.X, "y": state.TargetCords.Y,
-                        "z": state.TargetCords.Z, "a": math.degrees(state.TargetCords.A),
-                        "speed": state.TargetSpeed},
-            )
+            state.arm_moving = True
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Movement-ID", movement_id)
             self.send_header("Content-Length", str(len(response)))
             self.end_headers()
             self.wfile.write(response)
@@ -112,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         target_url = urlparse(self.path)
         if target_url.path == "/target":
-            if state.movement_state["moving"]:
+            if state.arm_moving:
                 self.send_error(409, "Arm is moving; retry after movement completes")
                 return
 
@@ -154,17 +146,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         elif self.path == "/movement-complete":
-            movement_id = self.headers.get("Movement-ID")
-            if not movement_id:
-                self.send_error(400, "Movement-ID header is required")
-                return
-            if movement_id != state.movement_state["id"]:
-                self.send_error(409, "Movement-ID does not match the current movement")
-                return
-            # Repeated callbacks are accepted if the first response was lost.
-            state.movement_state["status"] = "complete"
-            state.movement_state["moving"] = False
-            print("Movement complete:", movement_id)
+            state.arm_moving = False
+            print("Movement complete")
             self.send_response(204)
             self.end_headers()
             return

@@ -6,7 +6,7 @@
 // Returns false for both "already at target" (HTTP 204) and request errors.
 // On success packet contains one line per command:
 // milliseconds/S1-deg/S2-deg/S3-deg/S4-deg
-bool GetMovementPacket(const RobotAngles& currentAngles, String& packet, String& movementId)
+bool GetMovementPacket(const RobotAngles& currentAngles, String& packet)
 {
     if (WiFi.status() != WL_CONNECTED) {
         static unsigned long lastErrorTime = 0;
@@ -34,17 +34,10 @@ bool GetMovementPacket(const RobotAngles& currentAngles, String& packet, String&
         return false;
     }
 
-    const char* headerKeys[] = {"Movement-ID"};
-    http.collectHeaders(headerKeys, 1);
     const int statusCode = http.GET();
     if (statusCode == HTTP_CODE_OK) {
-        movementId = http.header("Movement-ID");
         packet = http.getString();
         http.end();
-        if (movementId.length() == 0) {
-            Serial.println("[ERROR][Movement] Backend returned no Movement-ID");
-            return false;
-        }
         if (packet.length() == 0) {
             Serial.println("[ERROR][Movement] Backend returned an empty packet");
             return false;
@@ -60,7 +53,7 @@ bool GetMovementPacket(const RobotAngles& currentAngles, String& packet, String&
 }
 
 // Retry this acknowledgement before asking for another movement packet.
-bool SendMovementComplete(const String& movementId)
+bool SendMovementComplete()
 {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[ERROR][Movement] WiFi disconnected; completion pending");
@@ -76,19 +69,12 @@ bool SendMovementComplete(const String& movementId)
         Serial.println("[ERROR][Movement] Cannot initialise completion request");
         return false;
     }
-    http.addHeader("Movement-ID", movementId);
     const int statusCode = http.POST("");
     http.end();
-    if (statusCode == HTTP_CODE_CONFLICT) {
-        // A restarted backend or another client can replace the movement ID.
-        // Resume polling from our last commanded angles instead of retrying forever.
-        Serial.println("[Movement] Completion ID expired; resuming target polling");
-        return true;
-    }
     if (statusCode != HTTP_CODE_NO_CONTENT) {
         Serial.printf("[ERROR][Movement] Completion POST failed: %d; will retry\n", statusCode);
         return false;
     }
-    Serial.printf("[Movement] Completion acknowledged: %s\n", movementId.c_str());
+    Serial.println("[Movement] Completion acknowledged");
     return true;
 }
