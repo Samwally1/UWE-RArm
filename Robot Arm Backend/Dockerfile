@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY main.py ./
+COPY main.py GlobalVariables.py ./
 COPY api/ ./api/
 COPY models/ ./models/
 COPY motion/ ./motion/

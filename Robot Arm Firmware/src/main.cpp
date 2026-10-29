@@ -8,9 +8,22 @@ void setup()
 
 void loop()
 {
+    static String pendingCompletion;
+    if (pendingCompletion.length() > 0) {
+        if (SendMovementComplete(pendingCompletion)) {
+            pendingCompletion = "";
+        } else {
+            delay(1000);
+        }
+        return;
+    }
+
     String movementPacket;
-    if (GetMovementPacket(targetAngles, movementPacket)) {
-        if (!ExecuteMovementPacket(movementPacket, targetAngles)) {
+    String movementId;
+    if (GetMovementPacket(targetAngles, movementPacket, movementId)) {
+        if (ExecuteMovementPacket(movementPacket, targetAngles)) {
+            pendingCompletion = movementId;
+        } else {
             Serial.println("[ERROR][Movement] Playback aborted; retaining last commanded angles");
         }
     }

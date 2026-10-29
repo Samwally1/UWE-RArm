@@ -1,26 +1,12 @@
 import json
 import math
-import os
+import GlobalVariables as state
+import uuid
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 from models.robot import Angles, Coordinates
-from motion.kinematics import ForwardKim
+from motion.kinematics import ForwardKim, InverseKim
 from motion.packets import CompileAnglePacket
-
-
-controller_state = {}
-arm_status = ""
-# Safe startup calibration.  A later successful POST to /calibration replaces
-# these values for the lifetime of the backend process.
-#
-# Joint 3's reversed limits intentionally preserve its inverted-servo setup.
-calibration_data = {
-    "jointLimits": [[15, 180], [0, 131], [154, 21], [0, 180]],
-    "jointHomes": [92, 128, 28, 112],
-}
-arm_mode = os.getenv("ARM_MODE", "Normal")
-
-TargetCords = Coordinates(0, 250, 250 , 0)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -29,13 +15,21 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == "/mode":
             self.send_response(200)
-            self.send_header("Mode", arm_mode)
+            self.send_header("Mode", state.arm_mode)
             self.end_headers()
 
             self.wfile.write(b"true")
 
         elif self.path == "/controller":
-            response = json.dumps(controller_state).encode("utf-8")
+            response = json.dumps(state.controller_state).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
+        elif self.path == "/movement":
+            response = json.dumps(state.movement_state).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(response)))
@@ -43,7 +37,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
         elif self.path == "/status":
-            response = arm_status.encode("utf-8")
+            response = state.arm_status.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Content-Length", str(len(response)))
@@ -51,11 +45,11 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
         elif self.path == "/calibration":
-            if calibration_data is None:
+            if state.calibration_data is None:
                 self.send_error(404, "Calibration not available")
                 return
 
-            response = json.dumps(calibration_data, separators=(",", ":")).encode("utf-8")
+            response = json.dumps(state.calibration_data, separators=(",", ":")).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(response)))
@@ -77,15 +71,15 @@ class Handler(BaseHTTPRequestHandler):
             # Do not tell the arm to move when it has reached the target.
             if (
                 math.dist((current_cords.X, current_cords.Y, current_cords.Z),
-                          (TargetCords.X, TargetCords.Y, TargetCords.Z)) <= 0.1
-                and abs(math.remainder(current_cords.A - TargetCords.A, 2 * math.pi)) <= math.radians(0.1)
+                          (state.TargetCords.X, state.TargetCords.Y, state.TargetCords.Z)) <= 0.1
+                and abs(math.remainder(current_cords.A - state.TargetCords.A, 2 * math.pi)) <= math.radians(0.1)
             ):
                 self.send_response(204)
                 self.end_headers()
                 return
 
             try:
-                angle_packet = CompileAnglePacket(current_cords, TargetCords, 10, 5)
+                angle_packet = CompileAnglePacket(current_cords, state.TargetCords, state.TargetSpeed, state.STEPS_PER_MM)
             except (ValueError, ZeroDivisionError, OverflowError):
                 self.send_error(422, "Unable to compile movement packet")
                 return
@@ -93,8 +87,16 @@ class Handler(BaseHTTPRequestHandler):
             # One timestamped servo command per line.  Keeping this in the
             # response body avoids HTTP header-size limits for long moves.
             response = ("\n".join(angle_packet) + "\n").encode("utf-8")
+            movement_id = uuid.uuid4().hex
+            state.movement_state.update(
+                id=movement_id, status="in_progress",
+                target={"x": state.TargetCords.X, "y": state.TargetCords.Y,
+                        "z": state.TargetCords.Z, "a": math.degrees(state.TargetCords.A),
+                        "speed": state.TargetSpeed},
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Movement-ID", movement_id)
             self.send_header("Content-Length", str(len(response)))
             self.end_headers()
             self.wfile.write(response)
@@ -103,16 +105,56 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        if self.path == "/controller":
-            target = controller_state
+        if self.path == "/target":
+            try:
+                x, y, z, a = (float(self.headers[name]) for name in ("X", "Y", "Z", "A"))
+                if not all(math.isfinite(value) for value in (x, y, z, a)):
+                    raise ValueError("Non-finite coordinate")
+                speed = float(self.headers.get("Speed", state.TargetSpeed))
+                if not math.isfinite(speed) or not 0 < speed <= state.MAX_SPEED:
+                    raise ValueError("Invalid speed")
+                candidate = Coordinates(x, y, z, math.radians(a))
+            except (KeyError, TypeError, ValueError, OverflowError):
+                self.send_error(400, f"X, Y, Z (mm) and A (degrees) must be finite; Speed must be greater than 0 and at most {state.MAX_SPEED:g} mm/s")
+                return
+            try:
+                if math.hypot(x, y) - 63.0 * math.cos(candidate.A) < 0:
+                    raise ValueError("Wrist behind base")
+                InverseKim(candidate)
+            except (ValueError, ZeroDivisionError, OverflowError):
+                self.send_error(422, "Target is unreachable")
+                return
+            state.TargetCords = candidate
+            state.TargetSpeed = speed
+            # An in-flight packet keeps its own target snapshot and ID.
+            self.send_response(204)
+            self.end_headers()
+            return
+
+        elif self.path == "/movement-complete":
+            movement_id = self.headers.get("Movement-ID")
+            if not movement_id:
+                self.send_error(400, "Movement-ID header is required")
+                return
+            if movement_id != state.movement_state["id"]:
+                self.send_error(409, "Movement-ID does not match the current movement")
+                return
+            # Repeated callbacks are accepted if the first response was lost.
+            state.movement_state["status"] = "complete"
+            print("Movement complete:", movement_id)
+            self.send_response(204)
+            self.end_headers()
+            return
+
+        elif self.path == "/controller":
+            target = state.controller_state
         elif self.path == "/status":
             content_length = int(self.headers.get("Content-Length", 0))
             if content_length <= 0 or content_length > 4096:
                 self.send_error(400, "Invalid arm status size")
                 return
 
-            global arm_status
-            arm_status = self.rfile.read(content_length).decode("utf-8")
+            state.arm_status = self.rfile.read(content_length).decode("utf-8")
             self.send_response(204)
             self.end_headers()
             return
@@ -146,8 +188,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(400, "Calibration values must be four 0-180 limits and home positions")
                 return
 
-            global calibration_data
-            calibration_data = {
+            state.calibration_data = {
                 "jointLimits": joint_limits,
                 "jointHomes": joint_homes,
             }
