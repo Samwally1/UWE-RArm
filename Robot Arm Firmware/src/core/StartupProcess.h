@@ -198,5 +198,7 @@ void StartupProcess(){
         degrees(targetAngles.s3),
         degrees(targetAngles.s4)
     );
+    
+    SendMovementComplete();
     Serial.println("Startup instructions complete");
 }

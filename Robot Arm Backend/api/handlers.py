@@ -104,6 +104,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         target_url = urlparse(self.path)
         if target_url.path == "/target":
+            
             if state.arm_moving:
                 self.send_error(409, "Arm is moving; retry after movement completes")
                 return
