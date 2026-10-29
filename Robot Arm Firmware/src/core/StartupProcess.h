@@ -5,6 +5,7 @@
 #include "../network/WifiConnection.h"
 #include "../network/ControllerClient.h"
 #include "../network/StatusClient.h"
+#include "../network/MovementClient.h"
 #include "../control/SticksToXYZ.h"
 #include "../calibration/CalibrationFuncs.h"
 #include "../motion/RobotMovement.h"

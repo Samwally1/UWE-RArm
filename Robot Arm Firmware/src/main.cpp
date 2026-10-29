@@ -17,7 +17,7 @@ void loop()
         Serial.printf("[Movement] Received packet: %u bytes\n", movementPacket.length());
         const RobotAngles savedTargetAngles = targetAngles;
 
-        if (!ExecuteMovementPacket(movementPacket, targetAngles)) {
+        if (!ExecuteMovementPacket(movementPacket)) {
             Serial.println("[ERROR][Movement] Playback aborted; returning to target angles");
             targetAngles = savedTargetAngles;
 
