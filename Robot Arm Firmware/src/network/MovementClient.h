@@ -4,7 +4,8 @@
 #include "../core/RobotTypes.h"
 
 // Returns false for both "already at target" (HTTP 204) and request errors.
-// On success packet contains one line per command:
+// On success the first two lines contain step count and interval (ms).
+// The remaining step count + 1 lines contain commands:
 // milliseconds/S1-deg/S2-deg/S3-deg/S4-deg
 bool GetMovementPacket(const RobotAngles& currentAngles, String& packet)
 {

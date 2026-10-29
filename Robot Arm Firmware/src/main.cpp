@@ -32,8 +32,8 @@ void loop()
                     jointIndex, static_cast<int>(lroundf(degrees(angles[jointIndex])))
                 ));
             }
-            SendMovementComplete();
         }
+        SendMovementComplete();
     }
 
     delay(100);

@@ -3,8 +3,8 @@
 #include <Arduino.h>
 #include <math.h>
 #include <limits.h>
-#include <iterator>
-#include <map>
+#include <stdlib.h>
+#include <errno.h>
 #include <ESP32Servo.h>
 #include "../config/RobotCharacteristics.h"
 #include "../core/RobotTypes.h"
@@ -40,105 +40,101 @@ int ServoCommandAngle(int jointIndex, int logicalAngle)
     return inverted ? 180 - clampedAngle : clampedAngle;
 }
 
-inline bool ExecuteMovementPacket(const String& packet)
+// Packet: step count, interval in milliseconds, then steps + 1 timestamped rows.
+inline bool ReadMovementUnsigned(const String& text, unsigned long& value)
 {
-    Serial.printf("[Movement] Packet: %s\n", packet.c_str());
-
-    int firstComma = packet.indexOf(',');
-    int secondComma = packet.indexOf(',', firstComma + 1);
-
-    if (firstComma <= 0 || secondComma <= firstComma + 1) {
-        Serial.println("[ERROR][Movement] Packet must begin with lines,speed,");
-        return false;
+    if (text.length() == 0) return false;
+    for (unsigned int i = 0; i < text.length(); ++i) {
+        if (text[i] < '0' || text[i] > '9') return false;
     }
+    errno = 0;
+    char* end = nullptr;
+    value = strtoul(text.c_str(), &end, 10);
+    return errno != ERANGE && *end == '\0';
+}
 
-    int lines = packet.substring(0, firstComma).toInt();
-    int speed = packet.substring(firstComma + 1, secondComma).toInt();
-
-    Serial.printf("[Movement] Lines: %d, speed: %d\n", lines, speed);
-
-    constexpr int MAX_COMMANDS = 10;
-    if (lines <= 0 || speed <= 0) {
-        Serial.println("[ERROR][Movement] Lines and speed must both be positive");
-        return false;
-    }
-    if (lines > MAX_COMMANDS) {
-        Serial.printf("[Movement] Command limit: parsing only the first %d commands\n", MAX_COMMANDS);
-    }
-    String commands[MAX_COMMANDS];
-    const int commandCount = min(lines, MAX_COMMANDS);
-
-    int start = secondComma + 1; // skips lines and speed
-
-    for (int i = 0; i < commandCount; i++) {
-        int end = packet.indexOf(',', start);
-
-        if (end == -1) {
-            end = packet.length();
-        }
-
-        commands[i] = packet.substring(start, end);
-        Serial.printf("[Movement] Command %d: %s\n", i + 1, commands[i].c_str());
-        start = end + 1;
-    }
-
-    // A command is four logical angles in degrees: S1/S2/S3/S4.  Index them
-    // by their scheduled offset from the one common movement start time.
-    std::map<unsigned long, String> scheduledCommands;
-    for (int commandIndex = 0; commandIndex < commandCount; ++commandIndex) {
-        scheduledCommands.emplace(static_cast<unsigned long>(commandIndex) * speed,
-                                  commands[commandIndex]);
-    }
-
-    const unsigned long movementStart = millis();
-    while (!scheduledCommands.empty()) {
-        const unsigned long elapsed = static_cast<unsigned long>(millis() - movementStart);
-        auto command = scheduledCommands.upper_bound(elapsed);
-        if (command == scheduledCommands.begin()) {
-            delay(1);
-            continue;
-        }
-        --command; // Newest command due at or before the current elapsed time.
-        const int commandNumber = static_cast<int>(command->first / speed) + 1;
-
-        float angles[4];
-        int valueStart = 0;
-        for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-            const int valueEnd = command->second.indexOf('/', valueStart);
-            if ((jointIndex < 3 && valueEnd < 0) || (jointIndex == 3 && valueEnd >= 0)) {
-                Serial.printf("[ERROR][Movement] Command %d must contain S1/S2/S3/S4\n",
-                    commandNumber);
-                return false;
-            }
-
-            const String value = command->second.substring(
-                valueStart, valueEnd < 0 ? command->second.length() : valueEnd
-            );
-            char* parseEnd = nullptr;
-            angles[jointIndex] = strtof(value.c_str(), &parseEnd);
-            if (parseEnd == value.c_str() || *parseEnd != '\0' || !isfinite(angles[jointIndex])
-                || angles[jointIndex] < 0.0f || angles[jointIndex] > 180.0f) {
-                Serial.printf("[ERROR][Movement] Command %d joint %d has an invalid angle\n",
-                    commandNumber, jointIndex + 1);
-                return false;
-            }
-            valueStart = valueEnd + 1;
-        }
-
-        for (int jointIndex = 0; jointIndex < 4; ++jointIndex) {
-            jointServos[jointIndex].write(ServoCommandAngle(
-                jointIndex, static_cast<int>(lroundf(angles[jointIndex]))
-            ));
-        }
-        targetAngles = {
-            radians(angles[0]), radians(angles[1]), radians(angles[2]), radians(angles[3])
-        };
-
-        // Commands before (and including) the command just applied are stale.
-        scheduledCommands.erase(scheduledCommands.begin(), std::next(command));
-    }
-
+inline bool ReadMovementLine(const String& packet, int& cursor, String& line)
+{
+    if (cursor >= static_cast<int>(packet.length())) return false;
+    int end = packet.indexOf('\n', cursor);
+    if (end < 0) end = packet.length();
+    line = packet.substring(cursor, end);
+    line.trim();
+    cursor = end + 1;
     return true;
 }
 
+inline bool ExecuteMovementPacket(const String& packet)
+{
+    int cursor = 0;
+    String line;
+    unsigned long steps, interval;
+    if (!ReadMovementLine(packet, cursor, line) || !ReadMovementUnsigned(line, steps)
+        || steps == 0 || steps > packet.length()
+        || !ReadMovementLine(packet, cursor, line) || !ReadMovementUnsigned(line, interval)) {
+        Serial.println("[ERROR][Movement] Expected step count and interval on separate lines");
+        return false;
+    }
 
+    // Validate the entire packet before issuing any servo commands.
+    const int rowsStart = cursor;
+    for (int pass = 0; pass < 2; ++pass) {
+        cursor = rowsStart;
+        unsigned long previousTime = 0;
+        const unsigned long movementStart = millis();
+        for (unsigned long row = 0; row <= steps; ++row) {
+            if (!ReadMovementLine(packet, cursor, line)) {
+                Serial.println("[ERROR][Movement] Missing command row");
+                return false;
+            }
+            int separator = line.indexOf('/');
+            unsigned long timestamp;
+            if (separator <= 0
+                || !ReadMovementUnsigned(line.substring(0, separator), timestamp)
+                || timestamp > LONG_MAX || (row == 0 && timestamp != 0)
+                || timestamp < previousTime) {
+                Serial.println("[ERROR][Movement] Invalid command timestamp");
+                return false;
+            }
+            previousTime = timestamp;
+            float angles[4];
+            int start = separator + 1;
+            for (int joint = 0; joint < 4; ++joint) {
+                int end = line.indexOf('/', start);
+                if ((joint < 3 && end < 0) || (joint == 3 && end >= 0)) {
+                    Serial.println("[ERROR][Movement] Expected timestamp/S1/S2/S3/S4");
+                    return false;
+                }
+                const String value = line.substring(start, end < 0 ? line.length() : end);
+                char* parseEnd = nullptr;
+                angles[joint] = strtof(value.c_str(), &parseEnd);
+                if (parseEnd == value.c_str() || *parseEnd != '\0'
+                    || !isfinite(angles[joint]) || angles[joint] < 0 || angles[joint] > 180) {
+                    Serial.println("[ERROR][Movement] Invalid joint angle");
+                    return false;
+                }
+                start = end + 1;
+            }
+            if (pass == 1) {
+                while (static_cast<unsigned long>(millis() - movementStart) < timestamp) {
+                    delay(1);
+                }
+                for (int joint = 0; joint < 4; ++joint) {
+                    jointServos[joint].write(ServoCommandAngle(
+                        joint, static_cast<int>(lroundf(angles[joint]))));
+                }
+                targetAngles = {static_cast<float>(radians(angles[0])), static_cast<float>(radians(angles[1])),
+                                static_cast<float>(radians(angles[2])), static_cast<float>(radians(angles[3]))};
+            }
+        }
+        if (packet.substring(cursor).length() > 0) {
+            String remainder = packet.substring(cursor);
+            remainder.trim();
+            if (remainder.length() > 0) {
+                Serial.println("[ERROR][Movement] Unexpected extra command rows");
+                return false;
+            }
+        }
+    }
+    return true;
+}
