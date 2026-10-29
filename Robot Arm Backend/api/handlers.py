@@ -57,6 +57,11 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
         elif urlparse(self.path).path == "/UpdateMovement":
+            if state.movement_state["moving"]:
+                self.send_response(204)
+                self.end_headers()
+                return
+
             # Firmware reports logical joint degrees, before servo inversion.
             query = parse_qs(urlparse(self.path).query)
             try:
@@ -89,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
             response = ("\n".join(angle_packet) + "\n").encode("utf-8")
             movement_id = uuid.uuid4().hex
             state.movement_state.update(
-                id=movement_id, status="in_progress",
+                id=movement_id, status="in_progress", moving=True,
                 target={"x": state.TargetCords.X, "y": state.TargetCords.Y,
                         "z": state.TargetCords.Z, "a": math.degrees(state.TargetCords.A),
                         "speed": state.TargetSpeed},
@@ -107,6 +112,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         target_url = urlparse(self.path)
         if target_url.path == "/target":
+            if state.movement_state["moving"]:
+                self.send_error(409, "Arm is moving; retry after movement completes")
+                return
+
             query = parse_qs(target_url.query, keep_blank_values=True)
 
             def target_value(name, default=None):
@@ -140,7 +149,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             state.TargetCords = candidate
             state.TargetSpeed = speed
-            # An in-flight packet keeps its own target snapshot and ID.
             self.send_response(204)
             self.end_headers()
             return
@@ -155,6 +163,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # Repeated callbacks are accepted if the first response was lost.
             state.movement_state["status"] = "complete"
+            state.movement_state["moving"] = False
             print("Movement complete:", movement_id)
             self.send_response(204)
             self.end_headers()

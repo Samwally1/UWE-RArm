@@ -18,7 +18,7 @@ class MovementApiTests(unittest.TestCase):
         self.old_target = state.TargetCords
         self.old_state = state.movement_state.copy()
         state.TargetCords = Coordinates(0, 250, 250, 0)
-        state.movement_state.update(id=None, status="idle", target=None)
+        state.movement_state.update(id=None, status="idle", target=None, moving=False)
         self.server = HTTPServer(("127.0.0.1", 0), handlers.Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -61,6 +61,7 @@ class MovementApiTests(unittest.TestCase):
         status, _, body = self.request("GET", "/movement")
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["status"], "complete")
+        self.assertFalse(json.loads(body)["moving"])
 
     def test_target_query_parameters(self):
         self.assertEqual(self.request("POST", "/target?X=200&Y=200&Z=200&A=0")[0], 204)
@@ -88,20 +89,33 @@ class MovementApiTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/movement-complete",
                          {"Movement-ID": "unknown"})[0], 409)
 
-    def test_target_during_move_keeps_old_completion_separate(self):
+    def test_targets_blocked_until_matching_completion(self):
         _, headers, _ = self.packet()
-        old_id = headers["Movement-ID"]
-        self.assertEqual(self.request("POST", "/target",
-                         {"X": "0", "Y": "230", "Z": "230", "A": "10"})[0], 204)
-        self.assertEqual(state.movement_state["target"]["y"], 250)
+        movement_id = headers["Movement-ID"]
+        original = state.TargetCords
+        self.assertTrue(state.movement_state["moving"])
+        for path, target_headers in (
+            ("/target", {"X": "0", "Y": "230", "Z": "230", "A": "10", "Speed": "20"}),
+            ("/target?X=0&Y=230&Z=230&A=10&Speed=20", {}),
+        ):
+            self.assertEqual(self.request("POST", path, target_headers)[0], 409)
+            self.assertIs(state.TargetCords, original)
+            self.assertEqual(state.TargetSpeed, 10)
+        self.assertEqual(self.packet()[0], 204)
+        self.assertEqual(state.movement_state["id"], movement_id)
         self.assertEqual(self.request("POST", "/movement-complete",
-                         {"Movement-ID": old_id})[0], 204)
-        self.assertEqual(state.TargetCords.Y, 230)
-        self.assertAlmostEqual(state.TargetCords.A, math.radians(10))
-        _, new_headers, _ = self.packet()
-        self.assertNotEqual(new_headers["Movement-ID"], old_id)
+                         {"Movement-ID": "wrong"})[0], 409)
+        self.assertTrue(state.movement_state["moving"])
         self.assertEqual(self.request("POST", "/movement-complete",
-                         {"Movement-ID": old_id})[0], 409)
+                         {"Movement-ID": movement_id})[0], 204)
+        self.assertFalse(state.movement_state["moving"])
+        self.assertEqual(self.request("POST", "/target?X=0&Y=230&Z=230&A=10")[0], 204)
+        _, new_headers, _ = self.packet(original)
+        self.assertNotEqual(new_headers["Movement-ID"], movement_id)
+        self.assertTrue(state.movement_state["moving"])
+        self.assertEqual(self.request("POST", "/movement-complete",
+                         {"Movement-ID": movement_id})[0], 409)
+        self.assertTrue(state.movement_state["moving"])
 
     def test_invalid_target_leaves_target_unchanged(self):
         original = state.TargetCords
@@ -114,10 +128,12 @@ class MovementApiTests(unittest.TestCase):
             self.assertIs(state.TargetCords, original)
 
     def test_speed_changes_packet_timing(self):
-        _, _, slow = self.packet()
+        _, slow_headers, slow = self.packet()
+        self.request("POST", "/movement-complete", {"Movement-ID": slow_headers["Movement-ID"]})
         self.assertEqual(self.request("POST", "/target",
                          {"X": "0", "Y": "250", "Z": "250", "A": "0", "Speed": "20"})[0], 204)
-        _, _, fast = self.packet()
+        _, fast_headers, fast = self.packet()
+        self.request("POST", "/movement-complete", {"Movement-ID": fast_headers["Movement-ID"]})
         slow_lines, fast_lines = slow.splitlines(), fast.splitlines()
         self.assertEqual(len(slow_lines), len(fast_lines))
         for first, second in zip(slow_lines, fast_lines):

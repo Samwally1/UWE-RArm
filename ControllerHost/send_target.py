@@ -6,7 +6,7 @@ import urllib.request
 
 
 TARGET_URL = "https://rarm.sjw-home.xyz/target"
-TARGET_HEADERS = {"X": "200", "Y": "200", "Z": "200", "A": "0", "Speed": "20"}
+TARGET_HEADERS = {"X": "-200", "Y": "200", "Z": "200", "A": "0", "Speed": "20"}
 
 
 def main():
